@@ -14,6 +14,7 @@ import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -222,6 +223,67 @@ public class ExpertEvaluationService {
         }).collect(Collectors.toList());
     }
 
+    public List<ExpertBidDocumentItemResponse> listBidDocuments(Long projectId) {
+        requireExpert();
+        requireSignedExpert(projectId, SecurityUtils.getUserId());
+        List<BidRegistration> regs = registrationMapper.selectList(
+                new LambdaQueryWrapper<BidRegistration>()
+                        .eq(BidRegistration::getProjectId, projectId)
+                        .eq(BidRegistration::getRegStatus, "SUCCESS")
+                        .orderByAsc(BidRegistration::getId));
+        List<ExpertBidDocumentItemResponse> list = new ArrayList<>();
+        for (BidRegistration reg : regs) {
+            BidDocument doc = bidDocumentMapper.selectOne(new LambdaQueryWrapper<BidDocument>()
+                    .eq(BidDocument::getRegistrationId, reg.getId())
+                    .isNull(BidDocument::getWithdrawTime)
+                    .orderByDesc(BidDocument::getSubmitTime)
+                    .last("LIMIT 1"));
+            if (doc == null || doc.getDecryptStatus() == null || doc.getDecryptStatus() != 1) {
+                continue;
+            }
+            list.add(ExpertBidDocumentItemResponse.builder()
+                    .registrationId(reg.getId())
+                    .companyName(reg.getCompanyName())
+                    .bidDocumentId(doc.getId())
+                    .attachId(doc.getAttachId())
+                    .bidPrice(doc.getBidPrice())
+                    .duration(doc.getDuration())
+                    .decryptStatus(doc.getDecryptStatus())
+                    .build());
+        }
+        return list;
+    }
+
+    public OpenTableResponse getOpenTable(Long projectId) {
+        requireExpert();
+        requireSignedExpertForView(projectId, SecurityUtils.getUserId());
+        List<BidRegistration> regs = registrationMapper.selectList(
+                new LambdaQueryWrapper<BidRegistration>()
+                        .eq(BidRegistration::getProjectId, projectId)
+                        .eq(BidRegistration::getRegStatus, "SUCCESS")
+                        .orderByAsc(BidRegistration::getId));
+        List<OpenTableResponse.OpenTableRow> rows = new ArrayList<>();
+        for (BidRegistration reg : regs) {
+            BidDocument doc = bidDocumentMapper.selectOne(new LambdaQueryWrapper<BidDocument>()
+                    .eq(BidDocument::getRegistrationId, reg.getId())
+                    .isNull(BidDocument::getWithdrawTime)
+                    .orderByDesc(BidDocument::getSubmitTime)
+                    .last("LIMIT 1"));
+            if (doc == null) {
+                continue;
+            }
+            rows.add(OpenTableResponse.OpenTableRow.builder()
+                    .registrationId(reg.getId())
+                    .companyName(reg.getCompanyName())
+                    .bidPrice(doc.getBidPrice())
+                    .duration(doc.getDuration())
+                    .decryptStatus(doc.getDecryptStatus())
+                    .decryptTime(doc.getDecryptTime())
+                    .build());
+        }
+        return OpenTableResponse.builder().projectId(projectId).rows(rows).build();
+    }
+
     private void requireScorePermission(Long projectId, Long expertId, String itemType) {
         if ("TECH".equals(itemType)) {
             return;
@@ -366,8 +428,30 @@ public class ExpertEvaluationService {
         if (!"OPENING".equals(project.getStatus()) && !"OPENED".equals(project.getStatus())) {
             throw new BusinessException(ResultCode.TENDER_STATUS_INVALID, "项目未处于开评标阶段");
         }
-        if (!"REVIEWING".equals(project.getEvalNode()) && !"FINISHED".equals(project.getEvalNode())) {
+        if (!"REVIEWING".equals(project.getEvalNode()) && !"FINISHED".equals(project.getEvalNode())
+                && !"NEGOTIATING".equals(project.getEvalNode()) && !"SECOND_QUOTE".equals(project.getEvalNode())) {
             throw new BusinessException(ResultCode.TENDER_STATUS_INVALID, "当前评审节点不允许评分");
+        }
+    }
+
+    private void requireSignedExpertForView(Long projectId, Long expertId) {
+        ExpertAssignment assignment = assignmentMapper.selectOne(
+                new LambdaQueryWrapper<ExpertAssignment>()
+                        .eq(ExpertAssignment::getProjectId, projectId)
+                        .eq(ExpertAssignment::getExpertId, expertId)
+                        .last("LIMIT 1"));
+        if (assignment == null) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "您未被指派参与该项目");
+        }
+        if (!"SIGNED".equals(assignment.getStatus())) {
+            throw new BusinessException(ResultCode.EXPERT_NOT_SIGNED);
+        }
+        TenderProject project = projectMapper.selectById(projectId);
+        if (project == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND);
+        }
+        if (!"OPENING".equals(project.getStatus()) && !"OPENED".equals(project.getStatus())) {
+            throw new BusinessException(ResultCode.TENDER_STATUS_INVALID, "项目未处于开评标阶段");
         }
     }
 

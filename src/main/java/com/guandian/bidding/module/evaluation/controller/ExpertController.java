@@ -3,6 +3,7 @@ package com.guandian.bidding.module.evaluation.controller;
 import com.guandian.bidding.common.api.R;
 import com.guandian.bidding.module.evaluation.dto.*;
 import com.guandian.bidding.module.evaluation.service.ExpertEvaluationService;
+import com.guandian.bidding.module.evaluation.service.ManagerReportService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,7 @@ import java.util.List;
 public class ExpertController {
 
     private final ExpertEvaluationService expertService;
+    private final ManagerReportService reportService;
 
     @Operation(summary = "我的评标任务")
     @GetMapping("/api/expert/assignments")
@@ -68,5 +70,33 @@ public class ExpertController {
     public R<List<ExpertAssignmentItemResponse>> electLeader(@PathVariable Long id,
                                                             @Validated @RequestBody ElectLeaderRequest request) {
         return R.ok(expertService.electLeader(id, request));
+    }
+
+    @Operation(summary = "投标文件下载列表(已解密)")
+    @GetMapping("/api/expert/tenders/{id}/bid-documents")
+    @PreAuthorize("hasRole('EXPERT')")
+    public R<List<ExpertBidDocumentItemResponse>> bidDocuments(@PathVariable Long id) {
+        return R.ok(expertService.listBidDocuments(id));
+    }
+
+    @Operation(summary = "开标表格查看")
+    @GetMapping("/api/expert/tenders/{id}/open-table")
+    @PreAuthorize("hasRole('EXPERT')")
+    public R<OpenTableResponse> openTable(@PathVariable Long id) {
+        return R.ok(expertService.getOpenTable(id));
+    }
+
+    @Operation(summary = "查看评标报告")
+    @GetMapping("/api/expert/tenders/{id}/report")
+    @PreAuthorize("hasRole('EXPERT')")
+    public R<ReportSummaryResponse> report(@PathVariable Long id) {
+        return R.ok(reportService.getReportForExpert(id));
+    }
+
+    @Operation(summary = "一键签名评标报告")
+    @PostMapping("/api/expert/tenders/{id}/report/sign-all")
+    @PreAuthorize("hasRole('EXPERT')")
+    public R<ReportSummaryResponse> signAllReport(@PathVariable Long id) {
+        return R.ok(reportService.signAllReport(id));
     }
 }
