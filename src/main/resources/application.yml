@@ -22,6 +22,11 @@ spring:
       # password:
       timeout: 3000ms
 
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 55MB
+
 # MyBatis-Plus
 mybatis-plus:
   configuration:
@@ -49,6 +54,9 @@ app:
     access-key: minioadmin
     secret-key: minioadmin
     bucket: bidding
+  file:
+    local-dir: ./data/uploads
+    max-size-mb: 50
 
 # Knife4j / OpenAPI
 springdoc:

@@ -19,3 +19,6 @@ Thumbs.db
 
 # 本地配置(含密钥),不入库
 src/main/resources/application-local.yml
+
+# 上传文件
+data/uploads/
