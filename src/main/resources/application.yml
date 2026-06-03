@@ -1,0 +1,62 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: bidding-platform
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/bidding?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
+    username: root
+    password: root
+    hikari:
+      # 负数：启动时不强制获取连接，方便在未连数据库时也能启动调试
+      initialization-fail-timeout: -1
+      minimum-idle: 0
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      # password:
+      timeout: 3000ms
+
+# MyBatis-Plus
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+      id-type: auto
+  mapper-locations: classpath*:/mapper/**/*.xml
+
+# 自定义配置
+app:
+  jwt:
+    # 生产环境务必替换为环境变量注入的强密钥(至少32字节)
+    secret: change-this-to-a-very-long-secret-key-at-least-32-bytes!!
+    expire-minutes: 720
+    header: Authorization
+    prefix: "Bearer "
+  minio:
+    enabled: false
+    endpoint: http://localhost:9000
+    access-key: minioadmin
+    secret-key: minioadmin
+    bucket: bidding
+
+# Knife4j / OpenAPI
+springdoc:
+  swagger-ui:
+    path: /doc.html
+knife4j:
+  enable: true
+
+logging:
+  level:
+    com.guandian.bidding: debug

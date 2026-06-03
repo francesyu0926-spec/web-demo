@@ -1,0 +1,21 @@
+# Maven
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.project
+.classpath
+
+# Logs / OS
+*.log
+.DS_Store
+Thumbs.db
+
+# 本地配置(含密钥),不入库
+src/main/resources/application-local.yml
