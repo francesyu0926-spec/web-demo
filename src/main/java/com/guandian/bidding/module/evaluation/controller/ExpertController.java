@@ -1,8 +1,7 @@
 package com.guandian.bidding.module.evaluation.controller;
 
 import com.guandian.bidding.common.api.R;
-import com.guandian.bidding.module.evaluation.dto.AssignmentRespondRequest;
-import com.guandian.bidding.module.evaluation.dto.ExpertAssignmentItemResponse;
+import com.guandian.bidding.module.evaluation.dto.*;
 import com.guandian.bidding.module.evaluation.service.ExpertEvaluationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -13,7 +12,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-@Tag(name = "专家-开评标", description = "任务列表 / 确认 / 签到")
+@Tag(name = "专家-开评标", description = "任务列表 / 确认 / 签到 / 审查 / 评分")
 @RestController
 @RequiredArgsConstructor
 public class ExpertController {
@@ -40,5 +39,26 @@ public class ExpertController {
     @PreAuthorize("hasRole('EXPERT')")
     public R<ExpertAssignmentItemResponse> signIn(@PathVariable Long id) {
         return R.ok(expertService.signIn(id));
+    }
+
+    @Operation(summary = "符合性审查(形式/资格/响应性)")
+    @PostMapping("/api/expert/reviews")
+    @PreAuthorize("hasRole('EXPERT')")
+    public R<ComplianceResultResponse> submitReviews(@Validated @RequestBody ExpertReviewRequest request) {
+        return R.ok(expertService.submitReviews(request));
+    }
+
+    @Operation(summary = "商务/技术/报价评分")
+    @PostMapping("/api/expert/scores")
+    @PreAuthorize("hasRole('EXPERT')")
+    public R<ScoreSummaryResponse> submitScores(@Validated @RequestBody ExpertScoreSubmitRequest request) {
+        return R.ok(expertService.submitScores(request));
+    }
+
+    @Operation(summary = "最终得分及候选人")
+    @GetMapping("/api/expert/tenders/{id}/final-score")
+    @PreAuthorize("hasRole('EXPERT')")
+    public R<FinalScoreResponse> finalScore(@PathVariable Long id) {
+        return R.ok(expertService.getFinalScore(id));
     }
 }

@@ -3,18 +3,16 @@ package com.guandian.bidding.module.evaluation.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.guandian.bidding.common.api.ResultCode;
 import com.guandian.bidding.common.exception.BusinessException;
-import com.guandian.bidding.module.evaluation.dto.AssignmentRespondRequest;
-import com.guandian.bidding.module.evaluation.dto.ExpertAssignmentItemResponse;
-import com.guandian.bidding.module.tender.entity.ExpertAssignment;
-import com.guandian.bidding.module.tender.entity.TenderProject;
-import com.guandian.bidding.module.tender.mapper.ExpertAssignmentMapper;
-import com.guandian.bidding.module.tender.mapper.TenderProjectMapper;
+import com.guandian.bidding.module.evaluation.dto.*;
+import com.guandian.bidding.module.tender.entity.*;
+import com.guandian.bidding.module.tender.mapper.*;
 import com.guandian.bidding.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
@@ -28,6 +26,11 @@ public class ExpertEvaluationService {
 
     private final ExpertAssignmentMapper assignmentMapper;
     private final TenderProjectMapper projectMapper;
+    private final EvaluationItemMapper evaluationItemMapper;
+    private final EvaluationScoreMapper evaluationScoreMapper;
+    private final BidRegistrationMapper registrationMapper;
+    private final BidDocumentMapper bidDocumentMapper;
+    private final EvaluationResultService resultService;
 
     public List<ExpertAssignmentItemResponse> listAssignments(String status) {
         requireExpert();
@@ -90,6 +93,240 @@ public class ExpertEvaluationService {
         assignment.setSignTime(LocalDateTime.now());
         assignmentMapper.updateById(assignment);
         return toItem(assignment);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public ComplianceResultResponse submitReviews(ExpertReviewRequest request) {
+        Long expertId = SecurityUtils.getUserId();
+        requireExpert();
+
+        Long projectId = null;
+        for (ExpertReviewRequest.ReviewScoreItem item : request.getScores()) {
+            BidRegistration reg = requireRegistration(item.getRegistrationId());
+            if (projectId == null) {
+                projectId = reg.getProjectId();
+            } else if (!projectId.equals(reg.getProjectId())) {
+                throw new BusinessException(ResultCode.PARAM_ERROR, "scores 必须属于同一项目");
+            }
+            requireSignedExpert(projectId, expertId);
+            requireDecrypted(reg.getId());
+
+            EvaluationItem evalItem = evaluationItemMapper.selectById(item.getItemId());
+            if (evalItem == null || !projectId.equals(evalItem.getProjectId())) {
+                throw new BusinessException(ResultCode.NOT_FOUND, "评审项不存在");
+            }
+            if (!isReviewType(evalItem.getType())) {
+                throw new BusinessException(ResultCode.PARAM_ERROR, "评审项类型不正确: " + evalItem.getType());
+            }
+            if (item.getPass() != 0 && item.getPass() != 1) {
+                throw new BusinessException(ResultCode.PARAM_ERROR, "pass 只能为 0 或 1");
+            }
+            upsertReview(projectId, reg.getId(), expertId, evalItem.getId(), item.getPass());
+        }
+        if (projectId == null) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "scores 不能为空");
+        }
+        return resultService.buildCompliance(projectId, null, false);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public ScoreSummaryResponse submitScores(ExpertScoreSubmitRequest request) {
+        Long expertId = SecurityUtils.getUserId();
+        requireExpert();
+
+        Long projectId = null;
+        int submittedFlag = Boolean.TRUE.equals(request.getSubmitted()) ? 1 : 0;
+
+        for (ExpertScoreSubmitRequest.ScoreItem item : request.getScores()) {
+            BidRegistration reg = requireRegistration(item.getRegistrationId());
+            if (projectId == null) {
+                projectId = reg.getProjectId();
+            } else if (!projectId.equals(reg.getProjectId())) {
+                throw new BusinessException(ResultCode.PARAM_ERROR, "scores 必须属于同一项目");
+            }
+            requireSignedExpert(projectId, expertId);
+            requireDecrypted(reg.getId());
+
+            EvaluationItem evalItem = evaluationItemMapper.selectById(item.getItemId());
+            if (evalItem == null || !projectId.equals(evalItem.getProjectId())) {
+                throw new BusinessException(ResultCode.NOT_FOUND, "评审项不存在");
+            }
+            if (!isScoreType(evalItem.getType())) {
+                throw new BusinessException(ResultCode.PARAM_ERROR, "评审项类型不正确: " + evalItem.getType());
+            }
+            if (evalItem.getMaxScore() != null && item.getScore().compareTo(evalItem.getMaxScore()) > 0) {
+                throw new BusinessException(ResultCode.PARAM_ERROR, "得分不能超过满分 " + evalItem.getMaxScore());
+            }
+            if (item.getScore().compareTo(BigDecimal.ZERO) < 0) {
+                throw new BusinessException(ResultCode.PARAM_ERROR, "得分不能为负数");
+            }
+            upsertScore(projectId, reg.getId(), expertId, evalItem.getId(), item.getScore(), submittedFlag);
+        }
+        if (projectId == null) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "scores 不能为空");
+        }
+
+        if (submittedFlag == 1) {
+            tryFinishEvaluation(projectId);
+        }
+        return resultService.buildScoreSummary(projectId, null, false);
+    }
+
+    public FinalScoreResponse getFinalScore(Long projectId) {
+        requireExpert();
+        requireSignedExpert(projectId, SecurityUtils.getUserId());
+        TenderProject project = projectMapper.selectById(projectId);
+        if (project == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND);
+        }
+        return resultService.buildFinalScore(projectId);
+    }
+
+    private void upsertReview(Long projectId, Long registrationId, Long expertId, Long itemId, Integer pass) {
+        EvaluationScore existing = findScore(registrationId, expertId, itemId);
+        if (existing == null) {
+            EvaluationScore score = new EvaluationScore();
+            score.setProjectId(projectId);
+            score.setRegistrationId(registrationId);
+            score.setExpertId(expertId);
+            score.setItemId(itemId);
+            score.setPass(pass);
+            score.setSubmitted(1);
+            score.setCreateBy(expertId);
+            evaluationScoreMapper.insert(score);
+        } else {
+            existing.setPass(pass);
+            existing.setSubmitted(1);
+            existing.setUpdateBy(expertId);
+            evaluationScoreMapper.updateById(existing);
+        }
+    }
+
+    private void upsertScore(Long projectId, Long registrationId, Long expertId, Long itemId,
+                             BigDecimal scoreValue, int submitted) {
+        EvaluationScore existing = findScore(registrationId, expertId, itemId);
+        if (existing == null) {
+            EvaluationScore score = new EvaluationScore();
+            score.setProjectId(projectId);
+            score.setRegistrationId(registrationId);
+            score.setExpertId(expertId);
+            score.setItemId(itemId);
+            score.setScore(scoreValue);
+            score.setSubmitted(submitted);
+            score.setCreateBy(expertId);
+            evaluationScoreMapper.insert(score);
+        } else {
+            if (existing.getSubmitted() != null && existing.getSubmitted() == 1) {
+                throw new BusinessException(ResultCode.TENDER_STATUS_INVALID, "评分已提交，不可修改");
+            }
+            existing.setScore(scoreValue);
+            existing.setSubmitted(submitted);
+            existing.setUpdateBy(expertId);
+            evaluationScoreMapper.updateById(existing);
+        }
+    }
+
+    private EvaluationScore findScore(Long registrationId, Long expertId, Long itemId) {
+        return evaluationScoreMapper.selectOne(new LambdaQueryWrapper<EvaluationScore>()
+                .eq(EvaluationScore::getRegistrationId, registrationId)
+                .eq(EvaluationScore::getExpertId, expertId)
+                .eq(EvaluationScore::getItemId, itemId)
+                .last("LIMIT 1"));
+    }
+
+    private void tryFinishEvaluation(Long projectId) {
+        List<ExpertAssignment> signed = assignmentMapper.selectList(
+                new LambdaQueryWrapper<ExpertAssignment>()
+                        .eq(ExpertAssignment::getProjectId, projectId)
+                        .eq(ExpertAssignment::getStatus, "SIGNED"));
+        if (signed.isEmpty()) {
+            return;
+        }
+        List<EvaluationItem> scoreItems = evaluationItemMapper.selectList(
+                new LambdaQueryWrapper<EvaluationItem>()
+                        .eq(EvaluationItem::getProjectId, projectId)
+                        .in(EvaluationItem::getType, "COMMERCE", "TECH", "PRICE"));
+        if (scoreItems.isEmpty()) {
+            return;
+        }
+        List<BidRegistration> regs = registrationMapper.selectList(
+                new LambdaQueryWrapper<BidRegistration>()
+                        .eq(BidRegistration::getProjectId, projectId)
+                        .eq(BidRegistration::getRegStatus, "SUCCESS"));
+        List<Long> qualifiedRegs = regs.stream()
+                .filter(r -> resultService.isRegistrationQualified(projectId, r.getId()))
+                .map(BidRegistration::getId)
+                .collect(Collectors.toList());
+        if (qualifiedRegs.isEmpty()) {
+            return;
+        }
+
+        for (ExpertAssignment assignment : signed) {
+            for (Long regId : qualifiedRegs) {
+                for (EvaluationItem item : scoreItems) {
+                    EvaluationScore score = findScore(regId, assignment.getExpertId(), item.getId());
+                    if (score == null || score.getSubmitted() == null || score.getSubmitted() != 1) {
+                        return;
+                    }
+                }
+            }
+        }
+        TenderProject project = projectMapper.selectById(projectId);
+        if (project != null && !"FINISHED".equals(project.getEvalNode())) {
+            project.setEvalNode("FINISHED");
+            projectMapper.updateById(project);
+        }
+    }
+
+    private void requireSignedExpert(Long projectId, Long expertId) {
+        ExpertAssignment assignment = assignmentMapper.selectOne(
+                new LambdaQueryWrapper<ExpertAssignment>()
+                        .eq(ExpertAssignment::getProjectId, projectId)
+                        .eq(ExpertAssignment::getExpertId, expertId)
+                        .last("LIMIT 1"));
+        if (assignment == null) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "您未被指派参与该项目");
+        }
+        if (!"SIGNED".equals(assignment.getStatus())) {
+            throw new BusinessException(ResultCode.EXPERT_NOT_SIGNED);
+        }
+        TenderProject project = projectMapper.selectById(projectId);
+        if (project == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND);
+        }
+        if (!"OPENING".equals(project.getStatus()) && !"OPENED".equals(project.getStatus())) {
+            throw new BusinessException(ResultCode.TENDER_STATUS_INVALID, "项目未处于开评标阶段");
+        }
+        if (!"REVIEWING".equals(project.getEvalNode()) && !"FINISHED".equals(project.getEvalNode())) {
+            throw new BusinessException(ResultCode.TENDER_STATUS_INVALID, "当前评审节点不允许评分");
+        }
+    }
+
+    private BidRegistration requireRegistration(Long registrationId) {
+        BidRegistration reg = registrationMapper.selectById(registrationId);
+        if (reg == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND, "报名记录不存在");
+        }
+        return reg;
+    }
+
+    private void requireDecrypted(Long registrationId) {
+        BidDocument doc = bidDocumentMapper.selectOne(new LambdaQueryWrapper<BidDocument>()
+                .eq(BidDocument::getRegistrationId, registrationId)
+                .isNull(BidDocument::getWithdrawTime)
+                .orderByDesc(BidDocument::getSubmitTime)
+                .last("LIMIT 1"));
+        if (doc == null || doc.getDecryptStatus() == null || doc.getDecryptStatus() != 1) {
+            throw new BusinessException(ResultCode.BID_FILE_LOCKED, "投标文件尚未解密，不可评审");
+        }
+    }
+
+    private boolean isReviewType(String type) {
+        return "FORMAL".equals(type) || "QUALIFY".equals(type) || "RESPONSE".equals(type);
+    }
+
+    private boolean isScoreType(String type) {
+        return "COMMERCE".equals(type) || "TECH".equals(type) || "PRICE".equals(type);
     }
 
     private ExpertAssignment requireOwnedAssignment(Long assignmentId) {
