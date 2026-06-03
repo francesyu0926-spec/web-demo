@@ -11,7 +11,15 @@ public enum ResultCode {
     SUCCESS(0, "success"),
 
     UNAUTHORIZED(1001, "未登录或登录已失效"),
+    ACCOUNT_EXISTS(1002, "账号或手机号已存在"),
     FORBIDDEN(1003, "无权限"),
+    LOGIN_FAILED(1004, "账号或密码错误"),
+    SMS_CODE_INVALID(1005, "验证码错误或已过期"),
+    USER_DISABLED(1006, "账号已禁用"),
+    APPLICATION_PENDING(1007, "已有待审核的申请"),
+    APPLICATION_NOT_FOUND(1008, "申请记录不存在"),
+    ALREADY_HAS_ROLE(1009, "您已拥有该角色"),
+    NOT_FOUND(1010, "资源不存在"),
 
     TENDER_STATUS_INVALID(2001, "项目状态不允许该操作"),
     REGISTRATION_CLOSED(2002, "报名或投标已截止"),

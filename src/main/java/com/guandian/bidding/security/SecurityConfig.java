@@ -33,12 +33,18 @@ public class SecurityConfig {
     /** 放行路径（游客可访问 + 文档 + 登录注册）。 */
     private static final String[] WHITELIST = {
             "/api/ping",
-            "/api/auth/**",
-            "/api/home/**",
-            "/api/search/**",
+            "/api/auth/register",
+            "/api/auth/login",
+            "/api/auth/sms-code",
+            "/api/auth/wechat/login",
+            "/api/home/announcements",
+            "/api/home/winners",
+            "/api/search",
+            "/api/search/hot",
             "/api/tenders/*",
-            "/api/winners/**",
-            "/api/articles/**",
+            "/api/winners/*",
+            "/api/articles",
+            "/api/articles/*",
             "/doc.html", "/webjars/**", "/v3/api-docs/**", "/swagger-ui/**", "/favicon.ico"
     };
 
