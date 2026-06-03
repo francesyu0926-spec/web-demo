@@ -7,6 +7,7 @@ import com.guandian.bidding.module.auth.dto.LoginRequest;
 import com.guandian.bidding.module.auth.dto.RegisterRequest;
 import com.guandian.bidding.module.auth.dto.SmsCodeRequest;
 import com.guandian.bidding.module.auth.dto.SwitchRoleRequest;
+import com.guandian.bidding.module.auth.dto.WechatLoginRequest;
 import com.guandian.bidding.module.auth.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -36,6 +37,12 @@ public class AuthController {
     @PostMapping("/login")
     public R<AuthTokenResponse> login(@Validated @RequestBody LoginRequest request) {
         return R.ok(authService.login(request));
+    }
+
+    @Operation(summary = "微信登录")
+    @PostMapping("/wechat/login")
+    public R<AuthTokenResponse> wechatLogin(@Validated @RequestBody WechatLoginRequest request) {
+        return R.ok(authService.wechatLogin(request));
     }
 
     @Operation(summary = "发送短信验证码")

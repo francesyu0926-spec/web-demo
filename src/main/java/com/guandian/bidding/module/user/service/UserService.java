@@ -13,8 +13,12 @@ import com.guandian.bidding.module.user.dto.EnterpriseResponse;
 import com.guandian.bidding.module.user.dto.EnterpriseUpdateRequest;
 import com.guandian.bidding.module.user.dto.ProfileResponse;
 import com.guandian.bidding.module.user.dto.ProfileUpdateRequest;
+import com.guandian.bidding.module.user.dto.PreferenceResponse;
+import com.guandian.bidding.module.user.dto.PreferenceUpdateRequest;
 import com.guandian.bidding.module.user.entity.SupplierProfile;
+import com.guandian.bidding.module.user.entity.UserPreference;
 import com.guandian.bidding.module.user.mapper.SupplierProfileMapper;
+import com.guandian.bidding.module.user.mapper.UserPreferenceMapper;
 import com.guandian.bidding.security.LoginUser;
 import com.guandian.bidding.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +37,7 @@ public class UserService {
     private final SysRoleMapper roleMapper;
     private final SysUserRoleMapper userRoleMapper;
     private final SupplierProfileMapper supplierProfileMapper;
+    private final UserPreferenceMapper preferenceMapper;
 
     public ProfileResponse getProfile() {
         LoginUser loginUser = SecurityUtils.requireLoginUser();
@@ -188,5 +193,47 @@ public class UserService {
             wrapper.ne(SupplierProfile::getId, excludeId);
         }
         return supplierProfileMapper.selectCount(wrapper) > 0;
+    }
+
+    public PreferenceResponse getPreference() {
+        requireBidder();
+        UserPreference pref = findPreference(SecurityUtils.getUserId());
+        if (pref == null) {
+            return new PreferenceResponse();
+        }
+        PreferenceResponse resp = new PreferenceResponse();
+        resp.setIndustries(pref.getIndustries());
+        resp.setRegions(pref.getRegions());
+        resp.setTypes(pref.getTypes());
+        return resp;
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public PreferenceResponse savePreference(PreferenceUpdateRequest req) {
+        requireBidder();
+        Long userId = SecurityUtils.getUserId();
+        UserPreference pref = findPreference(userId);
+        if (pref == null) {
+            pref = new UserPreference();
+            pref.setUserId(userId);
+            preferenceMapper.insert(pref);
+        }
+        pref.setIndustries(req.getIndustries());
+        pref.setRegions(req.getRegions());
+        pref.setTypes(req.getTypes());
+        preferenceMapper.updateById(pref);
+        return getPreference();
+    }
+
+    private UserPreference findPreference(Long userId) {
+        return preferenceMapper.selectOne(new LambdaQueryWrapper<UserPreference>()
+                .eq(UserPreference::getUserId, userId)
+                .last("LIMIT 1"));
+    }
+
+    private void requireBidder() {
+        if (!"BIDDER".equals(SecurityUtils.requireLoginUser().getActiveRole())) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "请切换为投标人身份");
+        }
     }
 }

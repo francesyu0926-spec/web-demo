@@ -8,10 +8,12 @@ import com.guandian.bidding.module.tender.entity.BidDocument;
 import com.guandian.bidding.module.tender.entity.BidRegistration;
 import com.guandian.bidding.module.tender.entity.EvaluationItem;
 import com.guandian.bidding.module.tender.entity.EvaluationScore;
+import com.guandian.bidding.module.tender.entity.ExpertAssignment;
 import com.guandian.bidding.module.tender.mapper.BidDocumentMapper;
 import com.guandian.bidding.module.tender.mapper.BidRegistrationMapper;
 import com.guandian.bidding.module.tender.mapper.EvaluationItemMapper;
 import com.guandian.bidding.module.tender.mapper.EvaluationScoreMapper;
+import com.guandian.bidding.module.tender.mapper.ExpertAssignmentMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -31,6 +33,7 @@ public class EvaluationResultService {
     private final EvaluationScoreMapper scoreMapper;
     private final BidRegistrationMapper registrationMapper;
     private final BidDocumentMapper bidDocumentMapper;
+    private final ExpertAssignmentMapper assignmentMapper;
 
     public ComplianceResultResponse buildCompliance(Long projectId, Long registrationId, boolean includeExpertVotes) {
         List<BidRegistration> regs = listDecryptedRegistrations(projectId, registrationId);
@@ -91,9 +94,9 @@ public class EvaluationResultService {
             if (!Boolean.TRUE.equals(qualifiedMap.get(reg.getId()))) {
                 continue;
             }
-            BigDecimal commerce = sumTypeAverage(reg.getId(), scoreItems, scoreMap, "COMMERCE");
-            BigDecimal tech = sumTypeAverage(reg.getId(), scoreItems, scoreMap, "TECH");
-            BigDecimal price = sumTypeAverage(reg.getId(), scoreItems, scoreMap, "PRICE");
+            BigDecimal commerce = sumTypeScore(projectId, reg.getId(), scoreItems, scoreMap, "COMMERCE");
+            BigDecimal tech = sumTypeScore(projectId, reg.getId(), scoreItems, scoreMap, "TECH");
+            BigDecimal price = sumTypeScore(projectId, reg.getId(), scoreItems, scoreMap, "PRICE");
             BigDecimal total = commerce.add(tech).add(price);
 
             ScoreSummaryResponse.BidderScore.BidderScoreBuilder builder = ScoreSummaryResponse.BidderScore.builder()
@@ -176,8 +179,9 @@ public class EvaluationResultService {
         return details;
     }
 
-    private BigDecimal sumTypeAverage(Long registrationId, List<EvaluationItem> items,
-                                      Map<Long, List<EvaluationScore>> scoreMap, String type) {
+    private BigDecimal sumTypeScore(Long projectId, Long registrationId, List<EvaluationItem> items,
+                                    Map<Long, List<EvaluationScore>> scoreMap, String type) {
+        Long leaderExpertId = resolveLeaderExpertId(projectId);
         BigDecimal sum = BigDecimal.ZERO;
         int count = 0;
         for (EvaluationItem item : items) {
@@ -189,17 +193,39 @@ public class EvaluationResultService {
                     .filter(s -> s.getSubmitted() != null && s.getSubmitted() == 1)
                     .filter(s -> s.getScore() != null)
                     .collect(Collectors.toList());
-            if (votes.isEmpty()) {
-                continue;
+            if ("TECH".equals(type)) {
+                if (votes.isEmpty()) {
+                    continue;
+                }
+                BigDecimal avg = votes.stream()
+                        .map(EvaluationScore::getScore)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add)
+                        .divide(BigDecimal.valueOf(votes.size()), 2, RoundingMode.HALF_UP);
+                sum = sum.add(avg);
+                count++;
+            } else {
+                if (leaderExpertId == null) {
+                    continue;
+                }
+                Long finalLeaderId = leaderExpertId;
+                Optional<EvaluationScore> leaderScore = votes.stream()
+                        .filter(s -> finalLeaderId.equals(s.getExpertId()))
+                        .findFirst();
+                if (leaderScore.isPresent()) {
+                    sum = sum.add(leaderScore.get().getScore());
+                    count++;
+                }
             }
-            BigDecimal avg = votes.stream()
-                    .map(EvaluationScore::getScore)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add)
-                    .divide(BigDecimal.valueOf(votes.size()), 2, RoundingMode.HALF_UP);
-            sum = sum.add(avg);
-            count++;
         }
         return count == 0 ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP) : sum.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private Long resolveLeaderExpertId(Long projectId) {
+        ExpertAssignment leader = assignmentMapper.selectOne(new LambdaQueryWrapper<ExpertAssignment>()
+                .eq(ExpertAssignment::getProjectId, projectId)
+                .eq(ExpertAssignment::getIsLeader, 1)
+                .last("LIMIT 1"));
+        return leader != null ? leader.getExpertId() : null;
     }
 
     private BigDecimal sumExpertType(Long registrationId, Long expertId, List<EvaluationItem> items,

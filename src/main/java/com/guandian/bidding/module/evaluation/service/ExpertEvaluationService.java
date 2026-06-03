@@ -154,6 +154,7 @@ public class ExpertEvaluationService {
             if (!isScoreType(evalItem.getType())) {
                 throw new BusinessException(ResultCode.PARAM_ERROR, "评审项类型不正确: " + evalItem.getType());
             }
+            requireScorePermission(projectId, expertId, evalItem.getType());
             if (evalItem.getMaxScore() != null && item.getScore().compareTo(evalItem.getMaxScore()) > 0) {
                 throw new BusinessException(ResultCode.PARAM_ERROR, "得分不能超过满分 " + evalItem.getMaxScore());
             }
@@ -180,6 +181,58 @@ public class ExpertEvaluationService {
             throw new BusinessException(ResultCode.NOT_FOUND);
         }
         return resultService.buildFinalScore(projectId);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public List<ExpertAssignmentItemResponse> electLeader(Long projectId, ElectLeaderRequest request) {
+        requireExpert();
+        Long voterId = SecurityUtils.getUserId();
+        requireSignedExpert(projectId, voterId);
+
+        ExpertAssignment target = assignmentMapper.selectOne(new LambdaQueryWrapper<ExpertAssignment>()
+                .eq(ExpertAssignment::getProjectId, projectId)
+                .eq(ExpertAssignment::getExpertId, request.getLeaderExpertId())
+                .last("LIMIT 1"));
+        if (target == null || !"SIGNED".equals(target.getStatus())) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "被推选专家须为本项目已签到专家");
+        }
+
+        List<ExpertAssignment> assignments = assignmentMapper.selectList(
+                new LambdaQueryWrapper<ExpertAssignment>()
+                        .eq(ExpertAssignment::getProjectId, projectId)
+                        .eq(ExpertAssignment::getStatus, "SIGNED"));
+        for (ExpertAssignment a : assignments) {
+            a.setIsLeader(a.getExpertId().equals(request.getLeaderExpertId()) ? 1 : 0);
+            assignmentMapper.updateById(a);
+        }
+
+        return assignments.stream().map(a -> {
+            TenderProject p = projectMapper.selectById(projectId);
+            return ExpertAssignmentItemResponse.builder()
+                    .assignmentId(a.getId())
+                    .projectId(projectId)
+                    .projectNo(p != null ? p.getProjectNo() : null)
+                    .projectName(p != null ? p.getName() : null)
+                    .projectStatus(p != null ? p.getStatus() : null)
+                    .bidOpenTime(p != null ? p.getBidOpenTime() : null)
+                    .isLeader(a.getIsLeader())
+                    .assignmentStatus(a.getStatus())
+                    .signTime(a.getSignTime())
+                    .build();
+        }).collect(Collectors.toList());
+    }
+
+    private void requireScorePermission(Long projectId, Long expertId, String itemType) {
+        if ("TECH".equals(itemType)) {
+            return;
+        }
+        ExpertAssignment assignment = assignmentMapper.selectOne(new LambdaQueryWrapper<ExpertAssignment>()
+                .eq(ExpertAssignment::getProjectId, projectId)
+                .eq(ExpertAssignment::getExpertId, expertId)
+                .last("LIMIT 1"));
+        if (assignment == null || assignment.getIsLeader() == null || assignment.getIsLeader() != 1) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "商务分/报价分仅专家组长可评分");
+        }
     }
 
     private void upsertReview(Long projectId, Long registrationId, Long expertId, Long itemId, Integer pass) {
@@ -261,10 +314,26 @@ public class ExpertEvaluationService {
             return;
         }
 
-        for (ExpertAssignment assignment : signed) {
-            for (Long regId : qualifiedRegs) {
-                for (EvaluationItem item : scoreItems) {
-                    EvaluationScore score = findScore(regId, assignment.getExpertId(), item.getId());
+        Long leaderId = signed.stream()
+                .filter(a -> a.getIsLeader() != null && a.getIsLeader() == 1)
+                .map(ExpertAssignment::getExpertId)
+                .findFirst()
+                .orElse(null);
+
+        for (Long regId : qualifiedRegs) {
+            for (EvaluationItem item : scoreItems) {
+                if ("TECH".equals(item.getType())) {
+                    for (ExpertAssignment assignment : signed) {
+                        EvaluationScore score = findScore(regId, assignment.getExpertId(), item.getId());
+                        if (score == null || score.getSubmitted() == null || score.getSubmitted() != 1) {
+                            return;
+                        }
+                    }
+                } else if ("COMMERCE".equals(item.getType()) || "PRICE".equals(item.getType())) {
+                    if (leaderId == null) {
+                        return;
+                    }
+                    EvaluationScore score = findScore(regId, leaderId, item.getId());
                     if (score == null || score.getSubmitted() == null || score.getSubmitted() != 1) {
                         return;
                     }

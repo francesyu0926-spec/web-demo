@@ -9,6 +9,7 @@ import com.guandian.bidding.module.auth.dto.LoginRequest;
 import com.guandian.bidding.module.auth.dto.RegisterRequest;
 import com.guandian.bidding.module.auth.dto.SmsCodeRequest;
 import com.guandian.bidding.module.auth.dto.SwitchRoleRequest;
+import com.guandian.bidding.module.auth.dto.WechatLoginRequest;
 import com.guandian.bidding.security.SecurityUtils;
 import com.guandian.bidding.module.auth.entity.SysRole;
 import com.guandian.bidding.module.auth.entity.SysUser;
@@ -100,6 +101,10 @@ public class AuthService {
         }
         ensureUserEnabled(user);
         return buildTokenResponse(user);
+    }
+
+    public AuthTokenResponse wechatLogin(WechatLoginRequest req) {
+        throw new BusinessException(ResultCode.PARAM_ERROR, "微信登录暂未开放，请使用账号或短信登录");
     }
 
     public void sendSmsCode(SmsCodeRequest req) {

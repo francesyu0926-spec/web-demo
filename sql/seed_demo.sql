@@ -41,3 +41,16 @@ WHERE c.code = 'guide'
 INSERT INTO `search_hot_keyword` (`keyword`, `search_count`)
 SELECT '智慧停车', 10
 WHERE NOT EXISTS (SELECT 1 FROM `search_hot_keyword` WHERE `keyword` = '智慧停车');
+
+INSERT INTO `cms_banner` (`title`, `link_url`, `sort`, `status`)
+SELECT '观点科技电子招投标平台', 'https://www.guandian.com', 1, 1
+WHERE NOT EXISTS (SELECT 1 FROM `cms_banner` WHERE `title` = '观点科技电子招投标平台');
+
+INSERT INTO `cms_site_link` (`name`, `url`, `sort`, `status`)
+SELECT '中国政府采购网', 'http://www.ccgp.gov.cn', 1, 1
+WHERE NOT EXISTS (SELECT 1 FROM `cms_site_link` WHERE `name` = '中国政府采购网');
+
+INSERT INTO `article_category` (`code`, `name`)
+SELECT 'standard', '标准招标文件'
+WHERE NOT EXISTS (SELECT 1 FROM `article_category` WHERE `code` = 'standard');
+

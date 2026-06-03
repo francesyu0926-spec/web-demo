@@ -11,7 +11,10 @@ import com.guandian.bidding.module.manager.dto.RegistrationDetailResponse;
 import com.guandian.bidding.module.tender.entity.*;
 import com.guandian.bidding.module.tender.mapper.*;
 import com.guandian.bidding.module.user.entity.SupplierProfile;
+import com.guandian.bidding.module.user.entity.UserPreference;
 import com.guandian.bidding.module.user.mapper.SupplierProfileMapper;
+import com.guandian.bidding.module.user.mapper.UserPreferenceMapper;
+import com.guandian.bidding.module.tender.dto.AnnouncementItemResponse;
 import com.guandian.bidding.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -39,6 +42,7 @@ public class BidderService {
     private final AwardMapper awardMapper;
     private final ExpertAssignmentMapper expertAssignmentMapper;
     private final SupplierProfileMapper supplierProfileMapper;
+    private final UserPreferenceMapper preferenceMapper;
     private final PasswordEncoder passwordEncoder;
 
     @Transactional(rollbackFor = Exception.class)
@@ -519,5 +523,134 @@ public class BidderService {
     private String generateOrderNo() {
         return "P" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
                 + ThreadLocalRandom.current().nextInt(100000, 999999);
+    }
+
+    public PageResult<MyAwardItemResponse> listMyAwards(String keyword, long pageNum, long pageSize) {
+        requireBidder();
+        Long userId = SecurityUtils.getUserId();
+        LambdaQueryWrapper<BidRegistration> regWrapper = new LambdaQueryWrapper<BidRegistration>()
+                .eq(BidRegistration::getSupplierId, userId);
+        List<BidRegistration> regs = registrationMapper.selectList(regWrapper);
+        if (regs.isEmpty()) {
+            return PageResult.of(Collections.emptyList(), 0, pageNum, pageSize);
+        }
+        Map<Long, BidRegistration> regMap = regs.stream()
+                .collect(Collectors.toMap(BidRegistration::getId, Function.identity(), (a, b) -> a));
+        List<Long> regIds = regs.stream().map(BidRegistration::getId).collect(Collectors.toList());
+
+        LambdaQueryWrapper<Award> awardWrapper = new LambdaQueryWrapper<Award>()
+                .in(Award::getRegistrationId, regIds)
+                .eq(Award::getIsWinner, 1)
+                .orderByDesc(Award::getPublicityStart)
+                .orderByDesc(Award::getId);
+        List<Award> awards = awardMapper.selectList(awardWrapper);
+        if (awards.isEmpty()) {
+            return PageResult.of(Collections.emptyList(), 0, pageNum, pageSize);
+        }
+
+        List<Long> projectIds = awards.stream().map(Award::getProjectId).distinct().collect(Collectors.toList());
+        Map<Long, TenderProject> projectMap = projectMapper.selectBatchIds(projectIds).stream()
+                .collect(Collectors.toMap(TenderProject::getId, Function.identity()));
+
+        List<MyAwardItemResponse> list = awards.stream().map(a -> {
+            TenderProject p = projectMap.get(a.getProjectId());
+            BidRegistration reg = regMap.get(a.getRegistrationId());
+            if (p == null || reg == null) {
+                return null;
+            }
+            if (StringUtils.hasText(keyword)
+                    && !p.getName().contains(keyword)
+                    && !p.getProjectNo().contains(keyword)) {
+                return null;
+            }
+            return MyAwardItemResponse.builder()
+                    .projectId(p.getId())
+                    .projectNo(p.getProjectNo())
+                    .projectName(p.getName())
+                    .registrationId(reg.getId())
+                    .rank(a.getRank())
+                    .finalPrice(a.getFinalPrice())
+                    .publicityStart(a.getPublicityStart())
+                    .noticePublishTime(a.getNoticePublishTime())
+                    .build();
+        }).filter(Objects::nonNull).collect(Collectors.toList());
+
+        int from = (int) Math.min((pageNum - 1) * pageSize, list.size());
+        int to = (int) Math.min(from + pageSize, list.size());
+        return PageResult.of(list.subList(from, to), list.size(), pageNum, pageSize);
+    }
+
+    public PageResult<AnnouncementItemResponse> listOpportunities(String keyword, String time,
+                                                                  long pageNum, long pageSize) {
+        requireBidder();
+        Long userId = SecurityUtils.getUserId();
+        UserPreference pref = preferenceMapper.selectOne(new LambdaQueryWrapper<UserPreference>()
+                .eq(UserPreference::getUserId, userId).last("LIMIT 1"));
+
+        LocalDateTime timeStart = parseOpportunityTimeStart(time);
+        LambdaQueryWrapper<TenderProject> wrapper = new LambdaQueryWrapper<TenderProject>()
+                .eq(TenderProject::getStatus, "BIDDING")
+                .like(StringUtils.hasText(keyword), TenderProject::getName, keyword)
+                .ge(timeStart != null, TenderProject::getBidOpenTime, timeStart)
+                .orderByDesc(TenderProject::getBidOpenTime);
+
+        if (pref != null) {
+            if (StringUtils.hasText(pref.getRegions())) {
+                List<String> regions = splitCsv(pref.getRegions());
+                if (!regions.isEmpty()) {
+                    wrapper.in(TenderProject::getRegion, regions);
+                }
+            }
+            if (StringUtils.hasText(pref.getTypes())) {
+                List<String> types = splitCsv(pref.getTypes());
+                if (!types.isEmpty()) {
+                    wrapper.in(TenderProject::getTenderType, types);
+                }
+            }
+            if (StringUtils.hasText(pref.getIndustries())) {
+                List<String> industries = splitCsv(pref.getIndustries());
+                if (!industries.isEmpty()) {
+                    wrapper.in(TenderProject::getIndustry, industries);
+                }
+            }
+        }
+
+        Page<TenderProject> page = projectMapper.selectPage(new Page<>(pageNum, pageSize), wrapper);
+        List<AnnouncementItemResponse> list = page.getRecords().stream()
+                .map(p -> AnnouncementItemResponse.builder()
+                        .projectId(p.getId())
+                        .projectNo(p.getProjectNo())
+                        .projectName(p.getName())
+                        .procurementType(p.getProcurementType())
+                        .tenderType(p.getTenderType())
+                        .region(p.getRegion())
+                        .budget(p.getBudget())
+                        .publishTime(p.getRegStart())
+                        .bidOpenTime(p.getBidOpenTime())
+                        .regEnd(p.getRegEnd())
+                        .build())
+                .collect(Collectors.toList());
+        return PageResult.of(list, page.getTotal(), pageNum, pageSize);
+    }
+
+    private LocalDateTime parseOpportunityTimeStart(String time) {
+        if (!StringUtils.hasText(time)) {
+            return null;
+        }
+        switch (time) {
+            case "week":
+                return LocalDateTime.now().minusDays(7);
+            case "month":
+                return LocalDateTime.now().minusDays(30);
+            default:
+                return null;
+        }
+    }
+
+    private List<String> splitCsv(String csv) {
+        return Arrays.stream(csv.split(","))
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .collect(Collectors.toList());
     }
 }

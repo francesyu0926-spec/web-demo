@@ -53,6 +53,34 @@ public class TenderPublicService {
         return buildAnnouncementPage(page, pageNum, pageSize);
     }
 
+    public PageResult<AnnouncementItemResponse> listHomeTenders(String category, String tenderType,
+                                                                 String procurementType,
+                                                                 long pageNum, long pageSize) {
+        LambdaQueryWrapper<TenderProject> wrapper = new LambdaQueryWrapper<TenderProject>()
+                .in(TenderProject::getStatus, PUBLIC_STATUS)
+                .orderByDesc(TenderProject::getBidOpenTime)
+                .orderByDesc(TenderProject::getId);
+
+        if ("BIDDING".equalsIgnoreCase(category)) {
+            wrapper.in(TenderProject::getProcurementType, Arrays.asList("PUBLIC", "INVITE"));
+        } else if ("NON_BIDDING".equalsIgnoreCase(category)) {
+            wrapper.in(TenderProject::getProcurementType,
+                    Arrays.asList("INQUIRY", "SINGLE", "NEGOTIATION", "CONSULTATION"));
+        }
+        if (StringUtils.hasText(tenderType)) {
+            wrapper.eq(TenderProject::getTenderType, tenderType);
+        }
+        if (StringUtils.hasText(procurementType)) {
+            wrapper.eq(TenderProject::getProcurementType, procurementType);
+        }
+
+        Page<TenderProject> page = projectMapper.selectPage(new Page<>(pageNum, pageSize), wrapper);
+        List<AnnouncementItemResponse> list = page.getRecords().stream()
+                .map(this::toAnnouncementItemFromProject)
+                .collect(Collectors.toList());
+        return PageResult.of(list, page.getTotal(), pageNum, pageSize);
+    }
+
     public PageResult<WinnerItemResponse> listWinners(long pageNum, long pageSize) {
         Page<Announcement> page = announcementMapper.selectPage(
                 new Page<>(pageNum, pageSize),

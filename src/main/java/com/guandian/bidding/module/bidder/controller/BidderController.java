@@ -3,8 +3,10 @@ package com.guandian.bidding.module.bidder.controller;
 import com.guandian.bidding.common.api.PageResult;
 import com.guandian.bidding.common.api.R;
 import com.guandian.bidding.module.bidder.dto.BidderProjectResponse;
+import com.guandian.bidding.module.bidder.dto.MyAwardItemResponse;
 import com.guandian.bidding.module.bidder.service.BidderService;
 import com.guandian.bidding.module.manager.dto.RegistrationDetailResponse;
+import com.guandian.bidding.module.tender.dto.AnnouncementItemResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -41,5 +43,24 @@ public class BidderController {
             @RequestParam(defaultValue = "1") long pageNum,
             @RequestParam(defaultValue = "10") long pageSize) {
         return R.ok(bidderService.listMyProjects(projectStatus, pageNum, pageSize));
+    }
+
+    @Operation(summary = "我的中标项目")
+    @GetMapping("/my-awards")
+    public R<PageResult<MyAwardItemResponse>> myAwards(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "1") long pageNum,
+            @RequestParam(defaultValue = "10") long pageSize) {
+        return R.ok(bidderService.listMyAwards(keyword, pageNum, pageSize));
+    }
+
+    @Operation(summary = "商机项目推荐")
+    @GetMapping("/opportunities")
+    public R<PageResult<AnnouncementItemResponse>> opportunities(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String time,
+            @RequestParam(defaultValue = "1") long pageNum,
+            @RequestParam(defaultValue = "10") long pageSize) {
+        return R.ok(bidderService.listOpportunities(keyword, time, pageNum, pageSize));
     }
 }

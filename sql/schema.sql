@@ -10,6 +10,8 @@ USE `bidding`;
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
+DROP TABLE IF EXISTS `cms_site_link`;
+DROP TABLE IF EXISTS `cms_banner`;
 DROP TABLE IF EXISTS `operation_log`;
 DROP TABLE IF EXISTS `search_history`;
 DROP TABLE IF EXISTS `search_hot_keyword`;
@@ -502,6 +504,31 @@ CREATE TABLE `award` (
 -- 5. 通用与内容
 -- =====================================================================
 
+CREATE TABLE `cms_banner` (
+  `id`          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `title`       VARCHAR(128) NULL,
+  `image_id`    BIGINT NULL COMMENT '轮播图附件',
+  `link_url`    VARCHAR(512) NULL COMMENT '点击跳转链接',
+  `sort`        INT NOT NULL DEFAULT 0,
+  `status`      TINYINT NOT NULL DEFAULT 1 COMMENT '0禁用 1启用',
+  `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted`     TINYINT(1) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='首页广告轮播';
+
+CREATE TABLE `cms_site_link` (
+  `id`          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `name`        VARCHAR(64) NOT NULL COMMENT '链接名称',
+  `url`         VARCHAR(512) NOT NULL,
+  `sort`        INT NOT NULL DEFAULT 0,
+  `status`      TINYINT NOT NULL DEFAULT 1 COMMENT '0禁用 1启用',
+  `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted`     TINYINT(1) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='常用网站链接';
+
 CREATE TABLE `attachment` (
   `id`           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `file_name`    VARCHAR(255) NULL,
@@ -647,7 +674,8 @@ INSERT INTO `article_category` (`code`, `name`) VALUES
   ('policy',   '政策法规'),
   ('case',     '案例解析'),
   ('download', '下载专区'),
-  ('news',     '信息动态');
+  ('news',     '信息动态'),
+  ('standard', '标准招标文件');
 
 INSERT INTO `sys_user` (`username`, `password`, `real_name`, `status`)
   VALUES ('admin', '$2a$10$REPLACE_WITH_BCRYPT_HASH', '系统管理员', 1);

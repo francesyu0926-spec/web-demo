@@ -12,6 +12,7 @@ import com.guandian.bidding.module.content.mapper.ComplaintMapper;
 import com.guandian.bidding.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
@@ -60,6 +61,32 @@ public class ComplaintService {
         if (complaint == null || !SecurityUtils.getUserId().equals(complaint.getUserId())) {
             throw new BusinessException(ResultCode.NOT_FOUND);
         }
+        return toResponse(complaint);
+    }
+
+    public PageResult<ComplaintResponse> listForManager(String keyword, Integer status,
+                                                        long pageNum, long pageSize) {
+        LambdaQueryWrapper<Complaint> wrapper = new LambdaQueryWrapper<Complaint>()
+                .like(StringUtils.hasText(keyword), Complaint::getTitle, keyword)
+                .eq(status != null, Complaint::getStatus, status)
+                .orderByDesc(Complaint::getCreateTime);
+        Page<Complaint> page = complaintMapper.selectPage(new Page<>(pageNum, pageSize), wrapper);
+        List<ComplaintResponse> list = page.getRecords().stream()
+                .map(this::toResponse).collect(Collectors.toList());
+        return PageResult.of(list, page.getTotal(), pageNum, pageSize);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public ComplaintResponse feedback(Long id, String reply) {
+        Complaint complaint = complaintMapper.selectById(id);
+        if (complaint == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND);
+        }
+        complaint.setReply(reply);
+        complaint.setStatus(2);
+        complaint.setHandler(SecurityUtils.getUserId());
+        complaint.setHandleTime(LocalDateTime.now());
+        complaintMapper.updateById(complaint);
         return toResponse(complaint);
     }
 

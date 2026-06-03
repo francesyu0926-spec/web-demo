@@ -61,4 +61,12 @@ public class ExpertController {
     public R<FinalScoreResponse> finalScore(@PathVariable Long id) {
         return R.ok(expertService.getFinalScore(id));
     }
+
+    @Operation(summary = "推选专家组长")
+    @PostMapping("/api/expert/tenders/{id}/elect-leader")
+    @PreAuthorize("hasRole('EXPERT')")
+    public R<List<ExpertAssignmentItemResponse>> electLeader(@PathVariable Long id,
+                                                            @Validated @RequestBody ElectLeaderRequest request) {
+        return R.ok(expertService.electLeader(id, request));
+    }
 }
