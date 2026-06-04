@@ -9,6 +9,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import javax.servlet.http.HttpServletRequest;
 import java.util.stream.Collectors;
 
 /**
@@ -38,8 +39,20 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(Exception.class)
-    public R<Void> handleException(Exception e) {
+    public R<Void> handleException(Exception e, HttpServletRequest request) throws Exception {
+        if (isDocRequest(request)) {
+            throw e;
+        }
         log.error("系统异常", e);
         return R.fail(ResultCode.SYSTEM_ERROR);
+    }
+
+    private boolean isDocRequest(HttpServletRequest request) {
+        if (request == null) {
+            return false;
+        }
+        String uri = request.getRequestURI();
+        return uri != null && (uri.contains("/v3/api-docs") || uri.contains("/swagger-ui")
+                || uri.endsWith("/doc.html") || uri.contains("/webjars/"));
     }
 }

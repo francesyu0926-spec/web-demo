@@ -48,7 +48,8 @@ public class SecurityConfig {
             "/api/winners/*",
             "/api/articles",
             "/api/articles/*",
-            "/doc.html", "/webjars/**", "/v3/api-docs/**", "/swagger-ui/**", "/favicon.ico"
+            "/doc.html", "/webjars/**", "/v3/api-docs", "/v3/api-docs/**",
+            "/swagger-ui.html", "/swagger-ui/**", "/favicon.ico"
     };
 
     @Bean

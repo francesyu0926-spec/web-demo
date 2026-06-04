@@ -58,12 +58,16 @@ app:
     local-dir: ./data/uploads
     max-size-mb: 50
 
-# Knife4j / OpenAPI
+# Knife4j / OpenAPI（文档入口：http://localhost:8080/doc.html）
 springdoc:
+  api-docs:
+    path: /v3/api-docs
   swagger-ui:
-    path: /doc.html
+    path: /swagger-ui.html
 knife4j:
   enable: true
+  setting:
+    language: zh_cn
 
 logging:
   level:
