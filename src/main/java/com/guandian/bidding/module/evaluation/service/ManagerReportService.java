@@ -5,6 +5,8 @@ import com.guandian.bidding.common.api.ResultCode;
 import com.guandian.bidding.common.exception.BusinessException;
 import com.guandian.bidding.module.evaluation.dto.*;
 import com.guandian.bidding.module.manager.support.ManagerProjectGuard;
+import com.guandian.bidding.module.notify.enums.NotificationType;
+import com.guandian.bidding.module.notify.service.NotificationService;
 import com.guandian.bidding.module.tender.entity.EvaluationReport;
 import com.guandian.bidding.module.tender.entity.ExpertAssignment;
 import com.guandian.bidding.module.tender.entity.ReportDoc;
@@ -35,6 +37,7 @@ public class ManagerReportService {
     private final ReportDocMapper reportDocMapper;
     private final ExpertAssignmentMapper assignmentMapper;
     private final EvaluationResultService resultService;
+    private final NotificationService notificationService;
 
     public ReportSummaryResponse getReport(Long projectId) {
         projectGuard.requireOwnedProject(projectId);
@@ -70,7 +73,7 @@ public class ManagerReportService {
 
     @Transactional(rollbackFor = Exception.class)
     public ReportSummaryResponse pushReport(Long projectId) {
-        projectGuard.requireOwnedProject(projectId);
+        TenderProject project = projectGuard.requireOwnedProject(projectId);
         EvaluationReport report = ensureReport(projectId);
         List<ReportDoc> docs = listDocs(report.getId());
         for (ReportDoc doc : docs) {
@@ -79,7 +82,21 @@ public class ManagerReportService {
                 reportDocMapper.updateById(doc);
             }
         }
+        notifyReportPush(project);
         return toSummary(report);
+    }
+
+    private void notifyReportPush(TenderProject project) {
+        List<Long> expertIds = assignmentMapper.selectList(new LambdaQueryWrapper<ExpertAssignment>()
+                        .eq(ExpertAssignment::getProjectId, project.getId())
+                        .eq(ExpertAssignment::getStatus, "SIGNED"))
+                .stream()
+                .map(ExpertAssignment::getExpertId)
+                .collect(Collectors.toList());
+        notificationService.sendBatch(expertIds, NotificationType.REPORT,
+                "评标报告待签名",
+                "「" + project.getName() + "」评标报告已推送，请尽快完成签名。",
+                project.getId());
     }
 
     @Transactional(rollbackFor = Exception.class)

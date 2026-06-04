@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.guandian.bidding.common.api.ResultCode;
 import com.guandian.bidding.common.exception.BusinessException;
 import com.guandian.bidding.module.evaluation.dto.*;
+import com.guandian.bidding.module.notify.enums.NotificationType;
+import com.guandian.bidding.module.notify.service.NotificationService;
 import com.guandian.bidding.module.tender.entity.*;
 import com.guandian.bidding.module.tender.mapper.*;
 import com.guandian.bidding.security.SecurityUtils;
@@ -26,6 +28,7 @@ public class NegotiationService {
     private final ExpertAssignmentMapper assignmentMapper;
     private final BidRegistrationMapper registrationMapper;
     private final TenderProjectMapper projectMapper;
+    private final NotificationService notificationService;
 
     @Transactional(rollbackFor = Exception.class)
     public NegotiationItemResponse createNegotiation(NegotiationCreateRequest req) {
@@ -45,7 +48,16 @@ public class NegotiationService {
         negotiationMapper.insert(n);
 
         updateEvalNode(reg.getProjectId(), "NEGOTIATING");
+        notifyNegotiation(reg, projectMapper.selectById(reg.getProjectId()), n.getId());
         return toNegotiationItem(n);
+    }
+
+    private void notifyNegotiation(BidRegistration reg, TenderProject project, Long negotiationId) {
+        String projectName = project != null ? project.getName() : "项目";
+        notificationService.send(reg.getSupplierId(), NotificationType.NEGOTIATION,
+                "谈判/磋商邀请",
+                "「" + projectName + "」专家组长向您发起了谈判/磋商要求，请及时回复。",
+                negotiationId);
     }
 
     public List<NegotiationItemResponse> listNegotiations(Long registrationId) {
@@ -92,7 +104,16 @@ public class NegotiationService {
         secondRoundQuoteMapper.insert(q);
 
         updateEvalNode(reg.getProjectId(), "SECOND_QUOTE");
+        notifySecondQuote(reg, projectMapper.selectById(reg.getProjectId()), q.getId());
         return toSecondQuoteItem(q);
+    }
+
+    private void notifySecondQuote(BidRegistration reg, TenderProject project, Long quoteId) {
+        String projectName = project != null ? project.getName() : "项目";
+        notificationService.send(reg.getSupplierId(), NotificationType.NEGOTIATION,
+                "二轮报价邀请",
+                "「" + projectName + "」专家组长向您发起了二轮报价要求，请及时回复。",
+                quoteId);
     }
 
     public List<SecondQuoteItemResponse> listSecondQuotes(Long registrationId) {

@@ -6,6 +6,8 @@ import com.guandian.bidding.common.exception.BusinessException;
 import com.guandian.bidding.module.manager.dto.ExpertAssignmentResponse;
 import com.guandian.bidding.module.manager.dto.ExpertDrawRequest;
 import com.guandian.bidding.module.manager.support.ManagerProjectGuard;
+import com.guandian.bidding.module.notify.enums.NotificationType;
+import com.guandian.bidding.module.notify.service.NotificationService;
 import com.guandian.bidding.module.tender.entity.ExpertAssignment;
 import com.guandian.bidding.module.tender.entity.ExpertProfile;
 import com.guandian.bidding.module.tender.entity.TenderProject;
@@ -30,6 +32,7 @@ public class ManagerExpertService {
     private final ExpertAssignmentMapper assignmentMapper;
     private final ExpertProfileMapper expertProfileMapper;
     private final ManagerProjectGuard projectGuard;
+    private final NotificationService notificationService;
 
     public List<ExpertAssignmentResponse> listExperts(Long projectId) {
         projectGuard.requireOwnedProject(projectId);
@@ -102,6 +105,10 @@ public class ManagerExpertService {
             assignment.setDrawType(req.getDrawType());
             assignment.setStatus("PENDING");
             assignmentMapper.insert(assignment);
+            notificationService.send(expertUserId, NotificationType.INVITE,
+                    "评审邀请",
+                    "您被邀请参与「" + project.getName() + "」评标，请及时确认。",
+                    assignment.getId());
         }
         return listExperts(projectId);
     }

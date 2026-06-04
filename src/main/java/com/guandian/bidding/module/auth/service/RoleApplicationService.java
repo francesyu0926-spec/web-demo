@@ -16,6 +16,8 @@ import com.guandian.bidding.module.auth.mapper.RoleApplicationMapper;
 import com.guandian.bidding.module.auth.mapper.SysRoleMapper;
 import com.guandian.bidding.module.auth.mapper.SysUserMapper;
 import com.guandian.bidding.module.auth.mapper.SysUserRoleMapper;
+import com.guandian.bidding.module.notify.enums.NotificationType;
+import com.guandian.bidding.module.notify.service.NotificationService;
 import com.guandian.bidding.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -38,6 +40,7 @@ public class RoleApplicationService {
     private final SysUserMapper userMapper;
     private final SysRoleMapper roleMapper;
     private final SysUserRoleMapper userRoleMapper;
+    private final NotificationService notificationService;
 
     @Transactional(rollbackFor = Exception.class)
     public RoleApplicationResponse apply(RoleApplicationRequest req) {
@@ -113,8 +116,27 @@ public class RoleApplicationService {
             grantRole(application.getUserId(), application.getApplyRole());
         }
 
+        notifyRoleAudit(application, req.getAuditStatus());
+
         SysUser user = userMapper.selectById(application.getUserId());
         return toResponse(application, user);
+    }
+
+    private void notifyRoleAudit(RoleApplication application, Integer auditStatus) {
+        String roleLabel = "MANAGER".equals(application.getApplyRole()) ? "项目经理" : "专家";
+        if (auditStatus == 1) {
+            notificationService.send(application.getUserId(), NotificationType.AUDIT,
+                    roleLabel + "申请已通过",
+                    "您的" + roleLabel + "角色申请已通过审核，可在个人中心切换身份。",
+                    application.getId());
+        } else {
+            notificationService.send(application.getUserId(), NotificationType.AUDIT,
+                    roleLabel + "申请未通过",
+                    "您的" + roleLabel + "角色申请未通过审核。"
+                            + (StringUtils.hasText(application.getAuditRemark())
+                            ? "原因：" + application.getAuditRemark() : ""),
+                    application.getId());
+        }
     }
 
     private void grantRole(Long userId, String roleCode) {

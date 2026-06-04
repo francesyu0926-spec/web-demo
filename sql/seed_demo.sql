@@ -50,6 +50,16 @@ INSERT INTO `cms_site_link` (`name`, `url`, `sort`, `status`)
 SELECT '中国政府采购网', 'http://www.ccgp.gov.cn', 1, 1
 WHERE NOT EXISTS (SELECT 1 FROM `cms_site_link` WHERE `name` = '中国政府采购网');
 
+INSERT INTO `notification` (`user_id`, `type`, `title`, `content`, `biz_id`, `is_read`)
+SELECT 2, 'AWARD', '中标公示发布', '恭喜！您在「市政道路养护工程」项目中中标，请留意后续代理费及通知书。', p.id, 0
+FROM `tender_project` p
+WHERE p.project_no = 'TP2026002'
+  AND NOT EXISTS (SELECT 1 FROM `notification` n WHERE n.user_id = 2 AND n.type = 'AWARD' AND n.biz_id = p.id);
+
+INSERT INTO `notification` (`user_id`, `type`, `title`, `content`, `biz_id`, `is_read`)
+SELECT 2, 'SYSTEM', '欢迎使用观点招投标平台', '您可在「我的消息」中查看报名审核、开标、定标等业务通知。', NULL, 1
+WHERE NOT EXISTS (SELECT 1 FROM `notification` WHERE `user_id` = 2 AND `title` = '欢迎使用观点招投标平台');
+
 INSERT INTO `article_category` (`code`, `name`)
 SELECT 'standard', '标准招标文件'
 WHERE NOT EXISTS (SELECT 1 FROM `article_category` WHERE `code` = 'standard');

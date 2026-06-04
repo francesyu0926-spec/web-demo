@@ -8,6 +8,8 @@ import com.guandian.bidding.module.evaluation.dto.ScoreSummaryResponse;
 import com.guandian.bidding.module.evaluation.service.EvaluationResultService;
 import com.guandian.bidding.module.manager.dto.*;
 import com.guandian.bidding.module.manager.support.ManagerProjectGuard;
+import com.guandian.bidding.module.notify.enums.NotificationType;
+import com.guandian.bidding.module.notify.service.NotificationService;
 import com.guandian.bidding.module.tender.entity.*;
 import com.guandian.bidding.module.tender.mapper.*;
 import com.guandian.bidding.security.SecurityUtils;
@@ -32,6 +34,7 @@ public class ManagerAwardService {
     private final BidRegistrationMapper registrationMapper;
     private final BidDocumentMapper bidDocumentMapper;
     private final EvaluationResultService resultService;
+    private final NotificationService notificationService;
 
     @Transactional(rollbackFor = Exception.class)
     public void publishAward(Long projectId, AwardPublishRequest req) {
@@ -74,6 +77,10 @@ public class ManagerAwardService {
             }
             reg.setBidStatus("WON");
             registrationMapper.updateById(reg);
+            notificationService.send(reg.getSupplierId(), NotificationType.AWARD,
+                    "中标公示发布",
+                    "恭喜！您在「" + project.getName() + "」项目中中标，请留意后续代理费及通知书。",
+                    projectId);
         }
 
         Announcement announcement = new Announcement();
@@ -108,6 +115,14 @@ public class ManagerAwardService {
             }
             award.setAgencyFee(calculateAgencyFee(project, req));
             awardMapper.updateById(award);
+            BidRegistration reg = registrationMapper.selectById(award.getRegistrationId());
+            if (reg != null) {
+                notificationService.send(reg.getSupplierId(), NotificationType.AWARD,
+                        "代理费通知",
+                        "「" + project.getName() + "」代理费已推送，金额 "
+                                + award.getAgencyFee() + " 元，请尽快缴纳。",
+                        projectId);
+            }
         }
     }
 
@@ -145,6 +160,13 @@ public class ManagerAwardService {
             award.setNoticeAttachId(req.getAttachId());
             award.setNoticePublishTime(LocalDateTime.now());
             awardMapper.updateById(award);
+            BidRegistration reg = registrationMapper.selectById(award.getRegistrationId());
+            if (reg != null) {
+                notificationService.send(reg.getSupplierId(), NotificationType.AWARD,
+                        "中标通知书发布",
+                        "「" + project.getName() + "」中标通知书已发布，请登录查看。",
+                        projectId);
+            }
         }
 
         Announcement notice = new Announcement();

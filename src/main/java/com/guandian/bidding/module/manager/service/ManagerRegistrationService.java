@@ -5,6 +5,8 @@ import com.guandian.bidding.common.api.ResultCode;
 import com.guandian.bidding.common.exception.BusinessException;
 import com.guandian.bidding.module.manager.dto.*;
 import com.guandian.bidding.module.manager.support.ManagerProjectGuard;
+import com.guandian.bidding.module.notify.enums.NotificationType;
+import com.guandian.bidding.module.notify.service.NotificationService;
 import com.guandian.bidding.module.tender.entity.BidRegistration;
 import com.guandian.bidding.module.tender.entity.PaymentOrder;
 import com.guandian.bidding.module.tender.entity.PaymentOrderItem;
@@ -18,6 +20,7 @@ import com.guandian.bidding.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -33,6 +36,7 @@ public class ManagerRegistrationService {
     private final PaymentOrderMapper paymentOrderMapper;
     private final PaymentOrderItemMapper paymentOrderItemMapper;
     private final ManagerProjectGuard projectGuard;
+    private final NotificationService notificationService;
 
     public List<RegistrationSummaryResponse> listByProject(Long projectId) {
         TenderProject project = projectGuard.requireOwnedProject(projectId);
@@ -84,7 +88,24 @@ public class ManagerRegistrationService {
             reg.setRegStatus("REJECTED");
         }
         registrationMapper.updateById(reg);
+        notifyRegistrationAudit(reg, project, req.getAuditStatus());
         return getDetail(id);
+    }
+
+    private void notifyRegistrationAudit(BidRegistration reg, TenderProject project, Integer auditStatus) {
+        String projectName = project != null ? project.getName() : "项目";
+        if (auditStatus == 1) {
+            notificationService.send(reg.getSupplierId(), NotificationType.AUDIT,
+                    "报名审核通过",
+                    "您报名的「" + projectName + "」已通过审核，请尽快完成缴费。",
+                    reg.getId());
+        } else {
+            notificationService.send(reg.getSupplierId(), NotificationType.AUDIT,
+                    "报名审核未通过",
+                    "您报名的「" + projectName + "」未通过审核。"
+                            + (StringUtils.hasText(reg.getAuditRemark()) ? "原因：" + reg.getAuditRemark() : ""),
+                    reg.getId());
+        }
     }
 
     public RegistrationPaymentResponse getPayment(Long id) {

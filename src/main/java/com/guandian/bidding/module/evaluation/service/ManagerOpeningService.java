@@ -5,6 +5,8 @@ import com.guandian.bidding.common.api.ResultCode;
 import com.guandian.bidding.common.exception.BusinessException;
 import com.guandian.bidding.module.evaluation.dto.*;
 import com.guandian.bidding.module.manager.support.ManagerProjectGuard;
+import com.guandian.bidding.module.notify.enums.NotificationType;
+import com.guandian.bidding.module.notify.service.NotificationService;
 import com.guandian.bidding.module.tender.entity.*;
 import com.guandian.bidding.module.tender.mapper.*;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +30,7 @@ public class ManagerOpeningService {
     private final ExpertProfileMapper expertProfileMapper;
     private final BidRegistrationMapper registrationMapper;
     private final BidDocumentMapper bidDocumentMapper;
+    private final NotificationService notificationService;
 
     @Transactional(rollbackFor = Exception.class)
     public ProjectProgressResponse openProject(Long projectId) {
@@ -39,7 +42,21 @@ public class ManagerOpeningService {
         project.setStatus("OPENING");
         project.setEvalNode("NOT_STARTED");
         projectMapper.updateById(project);
+        notifyOpening(project);
         return getProgress(projectId);
+    }
+
+    private void notifyOpening(TenderProject project) {
+        List<BidRegistration> registrations = registrationMapper.selectList(
+                new LambdaQueryWrapper<BidRegistration>()
+                        .eq(BidRegistration::getProjectId, project.getId())
+                        .eq(BidRegistration::getRegStatus, "SUCCESS"));
+        for (BidRegistration reg : registrations) {
+            notificationService.send(reg.getSupplierId(), NotificationType.OPEN,
+                    "项目已开标",
+                    "「" + project.getName() + "」已进入开标阶段，请按时参与解密。",
+                    project.getId());
+        }
     }
 
     public ProjectProgressResponse getProgress(Long projectId) {

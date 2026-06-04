@@ -9,6 +9,8 @@ import com.guandian.bidding.module.content.dto.ComplaintCreateRequest;
 import com.guandian.bidding.module.content.dto.ComplaintResponse;
 import com.guandian.bidding.module.content.entity.Complaint;
 import com.guandian.bidding.module.content.mapper.ComplaintMapper;
+import com.guandian.bidding.module.notify.enums.NotificationType;
+import com.guandian.bidding.module.notify.service.NotificationService;
 import com.guandian.bidding.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -24,6 +26,7 @@ import java.util.stream.Collectors;
 public class ComplaintService {
 
     private final ComplaintMapper complaintMapper;
+    private final NotificationService notificationService;
 
     public PageResult<ComplaintResponse> list(String keyword, LocalDateTime startTime,
                                               LocalDateTime endTime, long pageNum, long pageSize) {
@@ -87,6 +90,12 @@ public class ComplaintService {
         complaint.setHandler(SecurityUtils.getUserId());
         complaint.setHandleTime(LocalDateTime.now());
         complaintMapper.updateById(complaint);
+        if (complaint.getUserId() != null) {
+            notificationService.send(complaint.getUserId(), NotificationType.SYSTEM,
+                    "投诉建议已回复",
+                    "您提交的「" + complaint.getTitle() + "」已收到处理反馈，请查看详情。",
+                    complaint.getId());
+        }
         return toResponse(complaint);
     }
 
