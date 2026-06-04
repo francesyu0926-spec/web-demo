@@ -60,6 +60,25 @@ INSERT INTO `notification` (`user_id`, `type`, `title`, `content`, `biz_id`, `is
 SELECT 2, 'SYSTEM', '欢迎使用观点招投标平台', '您可在「我的消息」中查看报名审核、开标、定标等业务通知。', NULL, 1
 WHERE NOT EXISTS (SELECT 1 FROM `notification` WHERE `user_id` = 2 AND `title` = '欢迎使用观点招投标平台');
 
+INSERT INTO `tenderer_invite` (`inviter_id`, `invitee_user_id`, `invitee_name`, `invitee_phone`, `status`)
+SELECT 1, 2, '观点科技有限公司', COALESCE(u.phone, '13800000002'), 0
+FROM `sys_user` u
+WHERE u.id = 2
+  AND NOT EXISTS (
+    SELECT 1 FROM `tenderer_invite` ti
+    WHERE ti.inviter_id = 1 AND ti.invitee_user_id = 2 AND ti.status = 0
+  );
+
+UPDATE `tender_project` p
+SET p.tenderer_id = 2
+WHERE p.project_no = 'TP2026002'
+  AND p.tenderer_id IS NULL
+  AND EXISTS (
+    SELECT 1 FROM `sys_user_role` ur
+    JOIN `sys_role` r ON r.id = ur.role_id
+    WHERE ur.user_id = 2 AND r.code = 'TENDERER' AND ur.audit_status = 1
+  );
+
 INSERT INTO `article_category` (`code`, `name`)
 SELECT 'standard', '标准招标文件'
 WHERE NOT EXISTS (SELECT 1 FROM `article_category` WHERE `code` = 'standard');

@@ -7,6 +7,12 @@ import com.guandian.bidding.common.api.ResultCode;
 import com.guandian.bidding.common.exception.BusinessException;
 import com.guandian.bidding.module.manager.dto.*;
 import com.guandian.bidding.module.manager.support.ManagerProjectGuard;
+import com.guandian.bidding.module.auth.entity.SysRole;
+import com.guandian.bidding.module.auth.entity.SysUser;
+import com.guandian.bidding.module.auth.entity.SysUserRole;
+import com.guandian.bidding.module.auth.mapper.SysRoleMapper;
+import com.guandian.bidding.module.auth.mapper.SysUserMapper;
+import com.guandian.bidding.module.auth.mapper.SysUserRoleMapper;
 import com.guandian.bidding.module.tender.entity.Announcement;
 import com.guandian.bidding.module.tender.entity.EvaluationItem;
 import com.guandian.bidding.module.tender.entity.TenderProject;
@@ -36,6 +42,9 @@ public class ManagerTenderService {
     private final EvaluationItemMapper evaluationItemMapper;
     private final BidRegistrationMapper registrationMapper;
     private final ManagerProjectGuard projectGuard;
+    private final SysUserMapper userMapper;
+    private final SysRoleMapper roleMapper;
+    private final SysUserRoleMapper userRoleMapper;
 
     public PageResult<ManagerTenderSummaryResponse> list(String name, String projectNo, String tenderType,
                                                           String status, LocalDateTime bidOpenFrom,
@@ -197,6 +206,7 @@ public class ManagerTenderService {
         project.setIndustry(req.getIndustry());
         project.setRegion(req.getRegion());
         project.setBudget(req.getBudget());
+        validateTendererId(req.getTendererId());
         project.setTendererId(req.getTendererId());
         project.setAgencyId(req.getAgencyId());
         project.setFileFee(req.getFileFee());
@@ -249,5 +259,26 @@ public class ManagerTenderService {
         EvaluationItemDto dto = new EvaluationItemDto();
         BeanUtils.copyProperties(item, dto);
         return dto;
+    }
+
+    private void validateTendererId(Long tendererId) {
+        if (tendererId == null) {
+            return;
+        }
+        SysUser user = userMapper.selectById(tendererId);
+        if (user == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND, "招标人用户不存在");
+        }
+        SysRole role = roleMapper.selectOne(new LambdaQueryWrapper<SysRole>().eq(SysRole::getCode, "TENDERER"));
+        if (role == null) {
+            throw new BusinessException(ResultCode.SYSTEM_ERROR, "招标人角色未配置");
+        }
+        Long count = userRoleMapper.selectCount(new LambdaQueryWrapper<SysUserRole>()
+                .eq(SysUserRole::getUserId, tendererId)
+                .eq(SysUserRole::getRoleId, role.getId())
+                .eq(SysUserRole::getAuditStatus, 1));
+        if (count == 0) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "指定用户尚未成为招标人，请先发送邀请");
+        }
     }
 }
