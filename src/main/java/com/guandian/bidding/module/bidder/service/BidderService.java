@@ -5,6 +5,9 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.guandian.bidding.common.api.PageResult;
 import com.guandian.bidding.common.api.ResultCode;
 import com.guandian.bidding.common.exception.BusinessException;
+import com.guandian.bidding.module.audit.enums.OperationAction;
+import com.guandian.bidding.module.audit.enums.OperationModule;
+import com.guandian.bidding.module.audit.service.OperationLogService;
 import com.guandian.bidding.module.bidder.dto.*;
 import com.guandian.bidding.module.manager.dto.ProgressStepDto;
 import com.guandian.bidding.module.manager.dto.RegistrationDetailResponse;
@@ -44,6 +47,7 @@ public class BidderService {
     private final SupplierProfileMapper supplierProfileMapper;
     private final UserPreferenceMapper preferenceMapper;
     private final PasswordEncoder passwordEncoder;
+    private final OperationLogService operationLogService;
 
     @Transactional(rollbackFor = Exception.class)
     public RegistrationDetailResponse submitRegistration(Long projectId, RegistrationSubmitRequest req) {
@@ -261,6 +265,9 @@ public class BidderService {
 
         reg.setBidStatus("BIDDING");
         registrationMapper.updateById(reg);
+        operationLogService.record(OperationModule.BID, OperationAction.SUBMIT, doc.getId(),
+                OperationLogService.withProject(reg.getProjectId(),
+                        "registrationId=" + registrationId + ", docId=" + doc.getId()));
         return toBidDocumentResponse(doc);
     }
 
@@ -273,6 +280,9 @@ public class BidderService {
         doc.setEncryptPwd(passwordEncoder.encode(req.getPwd()));
         doc.setEncrypted(1);
         bidDocumentMapper.updateById(doc);
+        BidRegistration reg = registrationMapper.selectById(doc.getRegistrationId());
+        operationLogService.record(OperationModule.BID, OperationAction.ENCRYPT, doc.getId(),
+                OperationLogService.withProject(reg.getProjectId(), "registrationId=" + doc.getRegistrationId()));
         return toBidDocumentResponse(doc);
     }
 
@@ -310,6 +320,8 @@ public class BidderService {
         doc.setDecryptTime(LocalDateTime.now());
         doc.setSignImgId(req.getSignImgId());
         bidDocumentMapper.updateById(doc);
+        operationLogService.record(OperationModule.BID, OperationAction.DECRYPT, doc.getId(),
+                OperationLogService.withProject(reg.getProjectId(), "registrationId=" + reg.getId()));
         return toBidDocumentResponse(doc);
     }
 
@@ -382,6 +394,9 @@ public class BidderService {
 
         reg.setRegStatus("SUCCESS");
         registrationMapper.updateById(reg);
+        operationLogService.record(OperationModule.REGISTRATION, OperationAction.PAY, order.getId(),
+                OperationLogService.withProject(reg.getProjectId(),
+                        "registrationId=" + reg.getId() + ", orderNo=" + order.getOrderNo()));
         return toPaymentResponse(order);
     }
 

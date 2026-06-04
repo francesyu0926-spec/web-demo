@@ -3,6 +3,9 @@ package com.guandian.bidding.module.evaluation.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.guandian.bidding.common.api.ResultCode;
 import com.guandian.bidding.common.exception.BusinessException;
+import com.guandian.bidding.module.audit.enums.OperationAction;
+import com.guandian.bidding.module.audit.enums.OperationModule;
+import com.guandian.bidding.module.audit.service.OperationLogService;
 import com.guandian.bidding.module.evaluation.dto.*;
 import com.guandian.bidding.module.manager.support.ManagerProjectGuard;
 import com.guandian.bidding.module.notify.enums.NotificationType;
@@ -38,6 +41,7 @@ public class ManagerReportService {
     private final ExpertAssignmentMapper assignmentMapper;
     private final EvaluationResultService resultService;
     private final NotificationService notificationService;
+    private final OperationLogService operationLogService;
 
     public ReportSummaryResponse getReport(Long projectId) {
         projectGuard.requireOwnedProject(projectId);
@@ -68,6 +72,8 @@ public class ManagerReportService {
         report.setStatus(1);
         report.setUpdateBy(SecurityUtils.getUserId());
         reportMapper.updateById(report);
+        operationLogService.recordProject(OperationModule.EVALUATION, OperationAction.REPORT_EDIT,
+                projectId, "reportId=" + report.getId());
         return toSummary(report);
     }
 
@@ -83,6 +89,8 @@ public class ManagerReportService {
             }
         }
         notifyReportPush(project);
+        operationLogService.recordProject(OperationModule.EVALUATION, OperationAction.REPORT_PUSH,
+                projectId, "reportId=" + report.getId());
         return toSummary(report);
     }
 
@@ -138,6 +146,8 @@ public class ManagerReportService {
         doc.setSignedBy(SecurityUtils.getUserId());
         doc.setSignTime(LocalDateTime.now());
         reportDocMapper.updateById(doc);
+        operationLogService.recordProject(OperationModule.EVALUATION, OperationAction.REPORT_SIGN,
+                report.getProjectId(), "docId=" + docId + ", docName=" + doc.getDocName());
         return toDocItem(doc);
     }
 
@@ -156,6 +166,8 @@ public class ManagerReportService {
             doc.setSignTime(LocalDateTime.now());
             reportDocMapper.updateById(doc);
         }
+        operationLogService.recordProject(OperationModule.EVALUATION, OperationAction.REPORT_SIGN,
+                projectId, "signAll=true, docCount=" + docs.size());
         return toSummary(report);
     }
 

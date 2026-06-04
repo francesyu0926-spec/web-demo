@@ -16,6 +16,9 @@ import com.guandian.bidding.module.auth.mapper.RoleApplicationMapper;
 import com.guandian.bidding.module.auth.mapper.SysRoleMapper;
 import com.guandian.bidding.module.auth.mapper.SysUserMapper;
 import com.guandian.bidding.module.auth.mapper.SysUserRoleMapper;
+import com.guandian.bidding.module.audit.enums.OperationAction;
+import com.guandian.bidding.module.audit.enums.OperationModule;
+import com.guandian.bidding.module.audit.service.OperationLogService;
 import com.guandian.bidding.module.notify.enums.NotificationType;
 import com.guandian.bidding.module.notify.service.NotificationService;
 import com.guandian.bidding.security.SecurityUtils;
@@ -41,6 +44,7 @@ public class RoleApplicationService {
     private final SysRoleMapper roleMapper;
     private final SysUserRoleMapper userRoleMapper;
     private final NotificationService notificationService;
+    private final OperationLogService operationLogService;
 
     @Transactional(rollbackFor = Exception.class)
     public RoleApplicationResponse apply(RoleApplicationRequest req) {
@@ -117,6 +121,8 @@ public class RoleApplicationService {
         }
 
         notifyRoleAudit(application, req.getAuditStatus());
+        operationLogService.record(OperationModule.AUTH, OperationAction.ROLE_AUDIT, application.getId(),
+                "applyRole=" + application.getApplyRole() + ", auditStatus=" + req.getAuditStatus());
 
         SysUser user = userMapper.selectById(application.getUserId());
         return toResponse(application, user);

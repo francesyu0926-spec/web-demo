@@ -4,6 +4,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.guandian.bidding.common.api.ResultCode;
 import com.guandian.bidding.common.exception.BusinessException;
 import com.guandian.bidding.module.evaluation.dto.*;
+import com.guandian.bidding.module.audit.enums.OperationAction;
+import com.guandian.bidding.module.audit.enums.OperationModule;
+import com.guandian.bidding.module.audit.service.OperationLogService;
 import com.guandian.bidding.module.notify.enums.NotificationType;
 import com.guandian.bidding.module.notify.service.NotificationService;
 import com.guandian.bidding.module.tender.entity.*;
@@ -29,6 +32,7 @@ public class NegotiationService {
     private final BidRegistrationMapper registrationMapper;
     private final TenderProjectMapper projectMapper;
     private final NotificationService notificationService;
+    private final OperationLogService operationLogService;
 
     @Transactional(rollbackFor = Exception.class)
     public NegotiationItemResponse createNegotiation(NegotiationCreateRequest req) {
@@ -49,6 +53,8 @@ public class NegotiationService {
 
         updateEvalNode(reg.getProjectId(), "NEGOTIATING");
         notifyNegotiation(reg, projectMapper.selectById(reg.getProjectId()), n.getId());
+        operationLogService.recordProject(OperationModule.EVALUATION, OperationAction.NEGOTIATION,
+                reg.getProjectId(), "negotiationId=" + n.getId() + ", registrationId=" + reg.getId());
         return toNegotiationItem(n);
     }
 
@@ -105,6 +111,8 @@ public class NegotiationService {
 
         updateEvalNode(reg.getProjectId(), "SECOND_QUOTE");
         notifySecondQuote(reg, projectMapper.selectById(reg.getProjectId()), q.getId());
+        operationLogService.recordProject(OperationModule.EVALUATION, OperationAction.SECOND_QUOTE,
+                reg.getProjectId(), "quoteId=" + q.getId() + ", registrationId=" + reg.getId());
         return toSecondQuoteItem(q);
     }
 

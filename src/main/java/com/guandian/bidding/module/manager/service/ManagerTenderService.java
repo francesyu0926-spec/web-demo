@@ -13,6 +13,9 @@ import com.guandian.bidding.module.auth.entity.SysUserRole;
 import com.guandian.bidding.module.auth.mapper.SysRoleMapper;
 import com.guandian.bidding.module.auth.mapper.SysUserMapper;
 import com.guandian.bidding.module.auth.mapper.SysUserRoleMapper;
+import com.guandian.bidding.module.audit.enums.OperationAction;
+import com.guandian.bidding.module.audit.enums.OperationModule;
+import com.guandian.bidding.module.audit.service.OperationLogService;
 import com.guandian.bidding.module.tender.entity.Announcement;
 import com.guandian.bidding.module.tender.entity.EvaluationItem;
 import com.guandian.bidding.module.tender.entity.TenderProject;
@@ -45,6 +48,7 @@ public class ManagerTenderService {
     private final SysUserMapper userMapper;
     private final SysRoleMapper roleMapper;
     private final SysUserRoleMapper userRoleMapper;
+    private final OperationLogService operationLogService;
 
     public PageResult<ManagerTenderSummaryResponse> list(String name, String projectNo, String tenderType,
                                                           String status, LocalDateTime bidOpenFrom,
@@ -125,6 +129,11 @@ public class ManagerTenderService {
 
         if ("BIDDING".equals(project.getStatus())) {
             publishAnnouncement(project);
+            operationLogService.recordProject(OperationModule.TENDER, OperationAction.PUBLISH,
+                    project.getId(), "projectNo=" + project.getProjectNo() + ", name=" + project.getName());
+        } else {
+            operationLogService.recordProject(OperationModule.TENDER, OperationAction.CREATE,
+                    project.getId(), "projectNo=" + project.getProjectNo() + ", status=DRAFT");
         }
         return detail(project.getId());
     }
@@ -148,6 +157,8 @@ public class ManagerTenderService {
         String note = "\n[废标原因] " + req.getReason();
         project.setContent((project.getContent() == null ? "" : project.getContent()) + note);
         projectMapper.updateById(project);
+        operationLogService.recordProject(OperationModule.TENDER, OperationAction.ABORT, id,
+                "reason=" + req.getReason());
         return detail(id);
     }
 
@@ -158,6 +169,7 @@ public class ManagerTenderService {
         project.setStatus("AWARDED");
         project.setEvalNode("FINISHED");
         projectMapper.updateById(project);
+        operationLogService.recordProject(OperationModule.TENDER, OperationAction.UPDATE, id, "skipEval=true");
         return detail(id);
     }
 

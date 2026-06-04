@@ -79,6 +79,15 @@ WHERE p.project_no = 'TP2026002'
     WHERE ur.user_id = 2 AND r.code = 'TENDERER' AND ur.audit_status = 1
   );
 
+INSERT INTO `operation_log` (`user_id`, `role_code`, `module`, `action`, `biz_id`, `detail`, `ip`)
+SELECT 1, 'MANAGER', 'TENDER', 'PUBLISH', p.id, CONCAT('projectId=', p.id, ', projectNo=', p.project_no, ', seed=true'), '127.0.0.1'
+FROM `tender_project` p
+WHERE p.project_no = 'TP2026002'
+  AND NOT EXISTS (
+    SELECT 1 FROM `operation_log` l
+    WHERE l.module = 'TENDER' AND l.action = 'PUBLISH' AND l.biz_id = p.id
+  );
+
 INSERT INTO `article_category` (`code`, `name`)
 SELECT 'standard', '标准招标文件'
 WHERE NOT EXISTS (SELECT 1 FROM `article_category` WHERE `code` = 'standard');

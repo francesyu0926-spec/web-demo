@@ -5,6 +5,9 @@ import com.guandian.bidding.common.api.ResultCode;
 import com.guandian.bidding.common.exception.BusinessException;
 import com.guandian.bidding.module.manager.dto.*;
 import com.guandian.bidding.module.manager.support.ManagerProjectGuard;
+import com.guandian.bidding.module.audit.enums.OperationAction;
+import com.guandian.bidding.module.audit.enums.OperationModule;
+import com.guandian.bidding.module.audit.service.OperationLogService;
 import com.guandian.bidding.module.notify.enums.NotificationType;
 import com.guandian.bidding.module.notify.service.NotificationService;
 import com.guandian.bidding.module.tender.entity.BidRegistration;
@@ -37,6 +40,7 @@ public class ManagerRegistrationService {
     private final PaymentOrderItemMapper paymentOrderItemMapper;
     private final ManagerProjectGuard projectGuard;
     private final NotificationService notificationService;
+    private final OperationLogService operationLogService;
 
     public List<RegistrationSummaryResponse> listByProject(Long projectId) {
         TenderProject project = projectGuard.requireOwnedProject(projectId);
@@ -89,6 +93,9 @@ public class ManagerRegistrationService {
         }
         registrationMapper.updateById(reg);
         notifyRegistrationAudit(reg, project, req.getAuditStatus());
+        operationLogService.record(OperationModule.REGISTRATION, OperationAction.AUDIT, reg.getId(),
+                OperationLogService.withProject(reg.getProjectId(),
+                        "auditStatus=" + req.getAuditStatus() + ", registrationId=" + reg.getId()));
         return getDetail(id);
     }
 

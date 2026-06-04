@@ -16,6 +16,9 @@ import com.guandian.bidding.module.auth.mapper.SysRoleMapper;
 import com.guandian.bidding.module.auth.mapper.SysUserMapper;
 import com.guandian.bidding.module.auth.mapper.SysUserRoleMapper;
 import com.guandian.bidding.module.auth.mapper.TendererInviteMapper;
+import com.guandian.bidding.module.audit.enums.OperationAction;
+import com.guandian.bidding.module.audit.enums.OperationModule;
+import com.guandian.bidding.module.audit.service.OperationLogService;
 import com.guandian.bidding.module.notify.enums.NotificationType;
 import com.guandian.bidding.module.notify.service.NotificationService;
 import com.guandian.bidding.security.SecurityUtils;
@@ -39,6 +42,7 @@ public class TendererInviteService {
     private final SysRoleMapper roleMapper;
     private final SysUserRoleMapper userRoleMapper;
     private final NotificationService notificationService;
+    private final OperationLogService operationLogService;
 
     @Transactional(rollbackFor = Exception.class)
     public TendererInviteResponse create(TendererInviteCreateRequest req) {
@@ -70,6 +74,9 @@ public class TendererInviteService {
                     inviterName + " 邀请您成为招标人，请及时处理。",
                     invite.getId());
         }
+
+        operationLogService.record(OperationModule.AUTH, OperationAction.TENDERER_INVITE, invite.getId(),
+                "inviteePhone=" + phone + ", inviteeName=" + invite.getInviteeName());
 
         return toResponse(invite, userMapper.selectById(inviterId));
     }
@@ -118,12 +125,16 @@ public class TendererInviteService {
                     "招标人邀请已接受",
                     currentUserDisplayName(currentUser) + " 已接受您的招标人邀请。",
                     invite.getId());
+            operationLogService.record(OperationModule.AUTH, OperationAction.TENDERER_ACCEPT, invite.getId(),
+                    "inviteeUserId=" + currentUser.getId());
         } else {
             invite.setStatus(2);
             notificationService.send(invite.getInviterId(), NotificationType.INVITE,
                     "招标人邀请已拒绝",
                     currentUserDisplayName(currentUser) + " 已拒绝您的招标人邀请。",
                     invite.getId());
+            operationLogService.record(OperationModule.AUTH, OperationAction.TENDERER_REJECT, invite.getId(),
+                    "inviteeUserId=" + currentUser.getId());
         }
         invite.setUpdateBy(currentUser.getId());
         inviteMapper.updateById(invite);

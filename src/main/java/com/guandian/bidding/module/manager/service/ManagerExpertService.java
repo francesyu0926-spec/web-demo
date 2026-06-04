@@ -5,6 +5,9 @@ import com.guandian.bidding.common.api.ResultCode;
 import com.guandian.bidding.common.exception.BusinessException;
 import com.guandian.bidding.module.manager.dto.ExpertAssignmentResponse;
 import com.guandian.bidding.module.manager.dto.ExpertDrawRequest;
+import com.guandian.bidding.module.audit.enums.OperationAction;
+import com.guandian.bidding.module.audit.enums.OperationModule;
+import com.guandian.bidding.module.audit.service.OperationLogService;
 import com.guandian.bidding.module.manager.support.ManagerProjectGuard;
 import com.guandian.bidding.module.notify.enums.NotificationType;
 import com.guandian.bidding.module.notify.service.NotificationService;
@@ -33,6 +36,7 @@ public class ManagerExpertService {
     private final ExpertProfileMapper expertProfileMapper;
     private final ManagerProjectGuard projectGuard;
     private final NotificationService notificationService;
+    private final OperationLogService operationLogService;
 
     public List<ExpertAssignmentResponse> listExperts(Long projectId) {
         projectGuard.requireOwnedProject(projectId);
@@ -110,6 +114,8 @@ public class ManagerExpertService {
                     "您被邀请参与「" + project.getName() + "」评标，请及时确认。",
                     assignment.getId());
         }
+        operationLogService.recordProject(OperationModule.EVALUATION, OperationAction.DRAW_EXPERT,
+                projectId, "drawType=" + req.getDrawType() + ", count=" + expertUserIds.size());
         return listExperts(projectId);
     }
 

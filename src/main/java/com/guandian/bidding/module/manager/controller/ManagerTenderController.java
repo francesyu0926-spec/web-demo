@@ -2,6 +2,8 @@ package com.guandian.bidding.module.manager.controller;
 
 import com.guandian.bidding.common.api.PageResult;
 import com.guandian.bidding.common.api.R;
+import com.guandian.bidding.module.audit.dto.OperationLogResponse;
+import com.guandian.bidding.module.audit.service.OperationLogService;
 import com.guandian.bidding.module.manager.dto.*;
 import com.guandian.bidding.module.manager.service.ManagerExpertService;
 import com.guandian.bidding.module.manager.service.ManagerRegistrationService;
@@ -27,6 +29,7 @@ public class ManagerTenderController {
     private final ManagerTenderService tenderService;
     private final ManagerExpertService expertService;
     private final ManagerRegistrationService registrationService;
+    private final OperationLogService operationLogService;
 
     @Operation(summary = "我的项目列表")
     @GetMapping
@@ -105,5 +108,13 @@ public class ManagerTenderController {
     public R<List<ExpertAssignmentResponse>> drawExperts(@PathVariable Long id,
                                                          @RequestBody ExpertDrawRequest request) {
         return R.ok(expertService.drawExperts(id, request));
+    }
+
+    @Operation(summary = "项目操作日志")
+    @GetMapping("/{id}/operation-logs")
+    public R<PageResult<OperationLogResponse>> operationLogs(@PathVariable Long id,
+                                                             @RequestParam(defaultValue = "1") long pageNum,
+                                                             @RequestParam(defaultValue = "20") long pageSize) {
+        return R.ok(operationLogService.listByProject(id, pageNum, pageSize));
     }
 }

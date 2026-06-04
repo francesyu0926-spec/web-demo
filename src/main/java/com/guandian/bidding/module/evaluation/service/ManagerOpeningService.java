@@ -5,6 +5,9 @@ import com.guandian.bidding.common.api.ResultCode;
 import com.guandian.bidding.common.exception.BusinessException;
 import com.guandian.bidding.module.evaluation.dto.*;
 import com.guandian.bidding.module.manager.support.ManagerProjectGuard;
+import com.guandian.bidding.module.audit.enums.OperationAction;
+import com.guandian.bidding.module.audit.enums.OperationModule;
+import com.guandian.bidding.module.audit.service.OperationLogService;
 import com.guandian.bidding.module.notify.enums.NotificationType;
 import com.guandian.bidding.module.notify.service.NotificationService;
 import com.guandian.bidding.module.tender.entity.*;
@@ -31,6 +34,7 @@ public class ManagerOpeningService {
     private final BidRegistrationMapper registrationMapper;
     private final BidDocumentMapper bidDocumentMapper;
     private final NotificationService notificationService;
+    private final OperationLogService operationLogService;
 
     @Transactional(rollbackFor = Exception.class)
     public ProjectProgressResponse openProject(Long projectId) {
@@ -43,6 +47,8 @@ public class ManagerOpeningService {
         project.setEvalNode("NOT_STARTED");
         projectMapper.updateById(project);
         notifyOpening(project);
+        operationLogService.recordProject(OperationModule.OPENING, OperationAction.OPEN_START,
+                projectId, "projectNo=" + project.getProjectNo());
         return getProgress(projectId);
     }
 

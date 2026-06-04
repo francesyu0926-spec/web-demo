@@ -9,6 +9,9 @@ import com.guandian.bidding.module.content.dto.ComplaintCreateRequest;
 import com.guandian.bidding.module.content.dto.ComplaintResponse;
 import com.guandian.bidding.module.content.entity.Complaint;
 import com.guandian.bidding.module.content.mapper.ComplaintMapper;
+import com.guandian.bidding.module.audit.enums.OperationAction;
+import com.guandian.bidding.module.audit.enums.OperationModule;
+import com.guandian.bidding.module.audit.service.OperationLogService;
 import com.guandian.bidding.module.notify.enums.NotificationType;
 import com.guandian.bidding.module.notify.service.NotificationService;
 import com.guandian.bidding.security.SecurityUtils;
@@ -27,6 +30,7 @@ public class ComplaintService {
 
     private final ComplaintMapper complaintMapper;
     private final NotificationService notificationService;
+    private final OperationLogService operationLogService;
 
     public PageResult<ComplaintResponse> list(String keyword, LocalDateTime startTime,
                                               LocalDateTime endTime, long pageNum, long pageSize) {
@@ -96,6 +100,8 @@ public class ComplaintService {
                     "您提交的「" + complaint.getTitle() + "」已收到处理反馈，请查看详情。",
                     complaint.getId());
         }
+        operationLogService.record(OperationModule.COMPLAINT, OperationAction.FEEDBACK, complaint.getId(),
+                "title=" + complaint.getTitle());
         return toResponse(complaint);
     }
 

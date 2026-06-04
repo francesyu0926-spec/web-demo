@@ -8,6 +8,9 @@ import com.guandian.bidding.module.evaluation.dto.ScoreSummaryResponse;
 import com.guandian.bidding.module.evaluation.service.EvaluationResultService;
 import com.guandian.bidding.module.manager.dto.*;
 import com.guandian.bidding.module.manager.support.ManagerProjectGuard;
+import com.guandian.bidding.module.audit.enums.OperationAction;
+import com.guandian.bidding.module.audit.enums.OperationModule;
+import com.guandian.bidding.module.audit.service.OperationLogService;
 import com.guandian.bidding.module.notify.enums.NotificationType;
 import com.guandian.bidding.module.notify.service.NotificationService;
 import com.guandian.bidding.module.tender.entity.*;
@@ -35,6 +38,7 @@ public class ManagerAwardService {
     private final BidDocumentMapper bidDocumentMapper;
     private final EvaluationResultService resultService;
     private final NotificationService notificationService;
+    private final OperationLogService operationLogService;
 
     @Transactional(rollbackFor = Exception.class)
     public void publishAward(Long projectId, AwardPublishRequest req) {
@@ -95,6 +99,8 @@ public class ManagerAwardService {
 
         project.setStatus("AWARDED");
         projectMapper.updateById(project);
+        operationLogService.recordProject(OperationModule.AWARD, OperationAction.AWARD_PUBLISH,
+                projectId, "winnerCount=" + req.getWinners().size());
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -124,6 +130,8 @@ public class ManagerAwardService {
                         projectId);
             }
         }
+        operationLogService.recordProject(OperationModule.AWARD, OperationAction.AGENCY_FEE_PUSH,
+                projectId, "feeMode=" + req.getFeeMode());
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -181,6 +189,8 @@ public class ManagerAwardService {
 
         project.setStatus("FINISHED");
         projectMapper.updateById(project);
+        operationLogService.recordProject(OperationModule.AWARD, OperationAction.NOTICE_PUBLISH,
+                projectId, "title=" + notice.getTitle());
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -192,6 +202,8 @@ public class ManagerAwardService {
         project.setStatus("ARCHIVED");
         project.setArchived(1);
         projectMapper.updateById(project);
+        operationLogService.recordProject(OperationModule.TENDER, OperationAction.ARCHIVE,
+                projectId, "projectNo=" + project.getProjectNo());
     }
 
     private BigDecimal calculateAgencyFee(TenderProject project, AgencyFeePushRequest req) {

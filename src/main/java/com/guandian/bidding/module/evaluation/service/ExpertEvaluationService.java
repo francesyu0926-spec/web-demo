@@ -3,6 +3,9 @@ package com.guandian.bidding.module.evaluation.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.guandian.bidding.common.api.ResultCode;
 import com.guandian.bidding.common.exception.BusinessException;
+import com.guandian.bidding.module.audit.enums.OperationAction;
+import com.guandian.bidding.module.audit.enums.OperationModule;
+import com.guandian.bidding.module.audit.service.OperationLogService;
 import com.guandian.bidding.module.evaluation.dto.*;
 import com.guandian.bidding.module.tender.entity.*;
 import com.guandian.bidding.module.tender.mapper.*;
@@ -32,6 +35,7 @@ public class ExpertEvaluationService {
     private final BidRegistrationMapper registrationMapper;
     private final BidDocumentMapper bidDocumentMapper;
     private final EvaluationResultService resultService;
+    private final OperationLogService operationLogService;
 
     public List<ExpertAssignmentItemResponse> listAssignments(String status) {
         requireExpert();
@@ -93,6 +97,8 @@ public class ExpertEvaluationService {
         assignment.setStatus("SIGNED");
         assignment.setSignTime(LocalDateTime.now());
         assignmentMapper.updateById(assignment);
+        operationLogService.recordProject(OperationModule.EVALUATION, OperationAction.SIGN_IN,
+                assignment.getProjectId(), "assignmentId=" + assignmentId);
         return toItem(assignment);
     }
 
@@ -127,6 +133,8 @@ public class ExpertEvaluationService {
         if (projectId == null) {
             throw new BusinessException(ResultCode.PARAM_ERROR, "scores 不能为空");
         }
+        operationLogService.recordProject(OperationModule.EVALUATION, OperationAction.REVIEW,
+                projectId, "itemCount=" + request.getScores().size());
         return resultService.buildCompliance(projectId, null, false);
     }
 
@@ -170,6 +178,8 @@ public class ExpertEvaluationService {
 
         if (submittedFlag == 1) {
             tryFinishEvaluation(projectId);
+            operationLogService.recordProject(OperationModule.EVALUATION, OperationAction.SCORE,
+                    projectId, "submitted=true, itemCount=" + request.getScores().size());
         }
         return resultService.buildScoreSummary(projectId, null, false);
     }
@@ -206,6 +216,9 @@ public class ExpertEvaluationService {
             a.setIsLeader(a.getExpertId().equals(request.getLeaderExpertId()) ? 1 : 0);
             assignmentMapper.updateById(a);
         }
+
+        operationLogService.recordProject(OperationModule.EVALUATION, OperationAction.ELECT_LEADER,
+                projectId, "leaderExpertId=" + request.getLeaderExpertId());
 
         return assignments.stream().map(a -> {
             TenderProject p = projectMapper.selectById(projectId);
